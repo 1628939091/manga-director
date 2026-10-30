@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MangaDirector Studio · 表演指导工作台</title>
+<style>
+  :root{
+    --bg:#f5f6f8; --panel:#ffffff; --line:#e3e6ec; --line-soft:#eef0f4;
+    --ink:#141a24; --ink-2:#4b5566; --ink-3:#8a93a5;
+    --brand:#2f5bea; --brand-soft:#eaf0ff;
+    --ok:#12805c; --ok-soft:#e6f6ef;
+    --warn:#b26a00; --warn-soft:#fdf3e2;
+    --bad:#c62828; --bad-soft:#fdecec;
+    --mono:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;
+    --radius:10px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:var(--bg); color:var(--ink);
+    font:14px/1.6 -apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  button{font:inherit;cursor:pointer}
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-thumb{background:#cfd4de;border-radius:6px}
+  ::-webkit-scrollbar-track{background:transparent}
+
+  /* ---------- 顶栏 ---------- */
+  .top{
+    height:54px;display:flex;align-items:center;gap:14px;
+    padding:0 18px;background:var(--panel);border-bottom:1px solid var(--line);
+    position:sticky;top:0;z-index:20;
+  }
+  .logo{display:flex;align-items:center;gap:9px;font-weight:700;letter-spacing:.2px}
+  .logo i{
+    width:22px;height:22px;border-radius:6px;display:inline-block;
+    background:linear-gradient(135deg,#2f5bea,#7c3aed);
+  }
+  .logo small{font-weight:500;color:var(--ink-3);font-size:12px;letter-spacing:0}
+  .top .spacer{flex:1}
+  .pill{
+    font-size:12px;color:var(--ink-2);background:#f2f4f8;border:1px solid var(--line);
+    padding:3px 9px;border-radius:999px;
+  }
+  .pill.ok{color:var(--ok);background:var(--ok-soft);border-color:#c8ebdb}
+
+  /* ---------- 三栏 ---------- */
+  .app{
+    display:grid;grid-template-columns:300px minmax(0,1fr) 392px;
+    gap:14px;padding:14px;align-items:start;
+    max-width:1840px;margin:0 auto;
+  }
+  .col{display:flex;flex-direction:column;gap:12px;min-width:0}
+  .col.left{position:sticky;top:68px}
+  .card{
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    padding:14px;
+  }
+  .card h3{
+    margin:0 0 10px;font-size:12px;font-weight:700;letter-spacing:.9px;
+    color:var(--ink-3);text-transform:uppercase;
+  }
+
+  /* ---------- 左栏 ---------- */
+  select,input[type=text]{
+    width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;
+    background:#fbfcfe;color:var(--ink);font:inherit;outline:none;
+  }
+  select:focus,input:focus{border-color:var(--brand);background:#fff}
+  .meta-row{display:flex;flex-direction:column;gap:5px;margin-top:9px}
+  .meta-row .grp{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+  .tag{
+    font-size:11.5px;padding:2px 7px;border-radius:5px;background:#f2f4f8;
+    color:var(--ink-2);border:1px solid var(--line);
+  }
+  .tag.b{background:var(--brand-soft);color:var(--brand);border-color:#d3dfff}
+
+  .cast{margin-top:12px;display:flex;flex-direction:column;gap:9px}
+  .cast .who{display:flex;align-items:baseline;gap:7px;font-size:13px}
+  .cast .who b{font-weight:650}
+  .cast .who span{color:var(--ink-3);font-size:11.5px}
+  .bars{display:grid;grid-template-columns:38px 1fr 30px;gap:4px 6px;margin-top:4px;align-items:center}
+  .bars label{font-size:11px;color:var(--ink-3)}
+  .bars .val{font-size:11px;color:var(--ink-2);font-family:var(--mono);text-align:right}
+  .track{height:5px;background:#eef0f4;border-radius:3px;overflow:hidden}
+  .track i{display:block;height:100%;background:linear-gradient(90deg,#8aa8ff,#2f5bea);border-radius:3px}
+
+  .lines{display:flex;flex-direction:column;gap:8px;margin-top:4px}
+  .line-item{
+    padding:8px 9px;border:1px solid var(--line-soft);border-radius:8px;background:#fbfcfe;
+  }
+  .line-item .h{display:flex;justify-content:space-between;gap:8px;font-size:11.5px;color:var(--ink-3)}
+  .line-item .t{font-size:13px;margin-top:2px}
+  .line-item .s{font-size:11.5px;color:var(--ink-3);margin-top:2px}
+
+  .seg{display:flex;flex-wrap:wrap;gap:5px}
+  .seg button{
+    flex:1 1 auto;padding:6px 8px;border:1px solid var(--line);background:#fbfcfe;
+    border-radius:7px;font-size:12px;color:var(--ink-2);white-space:nowrap;
+  }
+  .seg button:hover{border-color:#c3cde4}
+  .seg button.on{background:var(--brand);border-color:var(--brand);color:#fff;font-weight:600}
+  .seg.small button{font-size:11.5px;padding:5px 6px}
+
+  .field{margin-top:10px}
+  .field label{display:block;font-size:11.5px;color:var(--ink-3);margin-bottom:4px}
+  .run-btn{
+    width:100%;margin-top:12px;padding:10px;border:none;border-radius:8px;
+    background:var(--brand);color:#fff;font-weight:650;letter-spacing:.3px;
+  }
+  .run-btn:disabled{background:#b9c3d8;cursor:not-allowed}
+  .hint{font-size:11.5px;color:var(--ink-3);margin-top:8px;line-height:1.5}
+
+  /* ---------- 中栏 ---------- */
+  .scene-head{display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap}
+  .scene-head h2{margin:0;font-size:17px;letter-spacing:.2px}
+  .scene-head .sub{color:var(--ink-3);font-size:12px;margin-top:3px}
+  .reps{display:flex;gap:5px;margin-left:auto;flex-wrap:wrap}
+  .reps button{
+    min-width:34px;padding:4px 8px;border:1px solid var(--line);background:#fbfcfe;
+    border-radius:7px;font-size:12px;color:var(--ink-2);
+  }
+  .reps button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .reps button.pass{border-color:#bfe3d3;background:var(--ok-soft);color:var(--ok)}
+  .reps button.fail{border-color:#f2c6c6;background:var(--bad-soft);color:var(--bad)}
+  .reps button.on.pass,.reps button.on.fail{color:#fff}
+  .reps button.on.pass{background:var(--ok);border-color:var(--ok)}
+  .reps button.on.fail{background:var(--bad);border-color:var(--bad)}
+
+  .shot{
+    border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);
+    padding:0;overflow:hidden;
+  }
+  .shot + .shot{margin-top:10px}
+  .shot .head{
+    display:flex;align-items:center;gap:9px;padding:10px 13px;
+    border-bottom:1px solid var(--line-soft);background:#fcfdfe;
+  }
+  .av{
+    width:26px;height:26px;border-radius:7px;flex:none;display:grid;place-items:center;
+    font-size:12px;font-weight:700;color:#fff;background:#5b6b8c;
+  }
+  .shot .head .txt{font-size:13.5px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .shot .head .rid{font-family:var(--mono);font-size:11px;color:var(--ink-3);margin-left:auto;flex:none}
+  .shot .body{padding:12px 13px}
+
+  .gauges{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 18px}
+  .g{}
+  .g .lab{display:flex;justify-content:space-between;align-items:baseline;font-size:11.5px;color:var(--ink-3)}
+  .g .lab b{font-family:var(--mono);font-size:12.5px;color:var(--ink);font-weight:600}
+  .gbar{position:relative;height:10px;border-radius:5px;background:#e9edf4;margin-top:7px;
+        box-shadow:inset 0 0 0 1px #dfe4ee}
+  .gbar .fill{position:absolute;inset:0 auto 0 0;border-radius:5px;
+        background:linear-gradient(90deg,#7fa2ff,#2f5bea)}
+  .gbar .fill.hot{background:linear-gradient(90deg,#ffb27f,#e2452b)}
+  .gbar .naive{
+    position:absolute;top:-5px;bottom:-5px;width:3px;background:#7c3aed;border-radius:2px;
+    box-shadow:0 0 0 2px rgba(124,58,237,.16);z-index:2;
+  }
+  .gbar .cap{position:absolute;top:-6px;bottom:-6px;width:0;border-left:2px dashed #e2452b;z-index:2}
+  .gbar .cap::after{
+    content:'';position:absolute;top:-1px;left:-4px;border:3px solid transparent;
+    border-top-color:#e2452b;
+  }
+  .g .note{font-size:11px;color:var(--ink-3);margin-top:4px;font-family:var(--mono)}
+  .g .note em{color:#7c3aed;font-style:normal}
+
+  .expr{display:flex;flex-wrap:wrap;gap:7px;align-items:center;margin-top:14px}
+  .badge{
+    font-size:11.5px;padding:2px 8px;border-radius:6px;font-weight:600;
+    background:#f2f4f8;color:var(--ink-2);border:1px solid var(--line);
+  }
+  .badge.style{background:var(--brand-soft);color:var(--brand);border-color:#d3dfff}
+  .badge.warn{background:var(--bad-soft);color:var(--bad);border-color:#f3c9c9}
+  .badge.ok{background:var(--ok-soft);color:var(--ok);border-color:#c8ebdb}
+  .gaze{font-size:11.5px;color:var(--ink-2)}
+
+  .legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:9px}
+  .lg{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;color:var(--ink-3)}
+  .lg i{width:10px;height:10px;display:inline-block;border-radius:2px}
+  .ln-naive{background:#7c3aed;width:3px!important;height:12px!important}
+  .ln-cap{border-left:2px dashed #e2452b;width:0!important;height:12px!important;border-radius:0!important}
+
+  .aus{display:flex;gap:10px;margin-top:11px;flex-wrap:wrap}  .au{display:flex;align-items:center;gap:5px;font-size:10.5px;color:var(--ink-3);font-family:var(--mono)}
+  .au .tr{width:34px;height:4px;background:#eef0f4;border-radius:3px;overflow:hidden}
+  .au .tr i{display:block;height:100%;background:#98a2b6}
+
+  .quote{
+    margin-top:12px;padding:8px 11px;border-left:3px solid #c9d6ff;background:#f7f9ff;
+    border-radius:0 7px 7px 0;font-size:12.5px;color:#33405a;
+  }
+  .ev{margin-top:9px;font-size:11.5px;color:var(--ink-3)}
+  .ev code{font-family:var(--mono);background:#f2f4f8;padding:1px 5px;border-radius:4px;color:var(--ink-2)}
+
+  .judge{margin-top:12px;border-top:1px dashed var(--line);padding-top:10px}
+  .dots{display:flex;flex-wrap:wrap;gap:5px}
+  .dot{
+    font-size:10.5px;padding:2px 6px;border-radius:5px;border:1px solid var(--line);
+    color:var(--ink-3);background:#fbfcfe;font-family:var(--mono);
+  }
+  .dot.hit{background:var(--ok-soft);color:var(--ok);border-color:#c8ebdb}
+  .dot.miss{background:var(--bad-soft);color:var(--bad);border-color:#f3c9c9}
+  .errs{margin-top:8px;display:flex;flex-direction:column;gap:4px}
+  .err{font-size:11.5px;color:var(--bad);background:var(--bad-soft);padding:3px 8px;border-radius:5px}
+  .vio{font-size:11.5px;color:var(--bad);background:#fff4f4;border:1px solid #f3c9c9;padding:5px 8px;border-radius:6px;margin-top:6px}
+  .vio b{font-weight:700}
+
+  /* ---------- 右栏 ---------- */
+  .kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+  .kpi{padding:9px 10px;border:1px solid var(--line-soft);border-radius:8px;background:#fbfcfe}
+  .kpi .n{font-size:19px;font-weight:700;font-family:var(--mono);letter-spacing:-.5px}
+  .kpi .l{font-size:11px;color:var(--ink-3);margin-top:1px}
+  .kpi.good .n{color:var(--ok)} .kpi.bad .n{color:var(--bad)}
+
+  table{width:100%;border-collapse:collapse;font-size:11.5px}
+  th,td{padding:5px 6px;text-align:left;border-bottom:1px solid var(--line-soft)}
+  th{color:var(--ink-3);font-weight:600;font-size:11px;letter-spacing:.3px}
+  td.num{font-family:var(--mono);text-align:right}
+  td.diff{background:var(--warn-soft);color:var(--warn);font-weight:600}
+  td.hit{color:var(--ok)} td.miss{color:var(--bad)}
+  #divTable td{max-width:66px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #divTable td.num{max-width:56px}
+  .scroll{max-height:320px;overflow:auto}
+
+  /* 五臂对比条形图 */
+  .cmp-row{display:grid;grid-template-columns:72px 1fr 66px;gap:8px;align-items:center;margin-bottom:8px}
+  .cmp-lab{font-size:11.5px;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .cmp-bar{position:relative;height:16px;background:#eef1f7;border-radius:4px;overflow:hidden;
+           box-shadow:inset 0 0 0 1px #e4e8f0}
+  .cmp-bar .p1{position:absolute;inset:0 auto 0 0;background:#b9ccff;border-radius:4px}
+  .cmp-bar .pk{position:absolute;inset:0 auto 0 0;background:#2f5bea;border-radius:4px}
+  .cmp-num{font-family:var(--mono);font-size:11.5px;text-align:right;color:var(--ink-2);letter-spacing:-.3px}
+  .cmp-num b{color:var(--brand);font-weight:700;font-size:12px}
+
+  .empty{    padding:38px 16px;text-align:center;color:var(--ink-3);font-size:13px;
+    border:1px dashed var(--line);border-radius:var(--radius);background:#fbfcfe;
+  }
+  .empty b{display:block;color:var(--ink-2);margin-bottom:4px;font-size:14px}
+
+  .prompt{
+    font-family:var(--mono);font-size:11.5px;line-height:1.7;white-space:pre-wrap;
+    background:#f7f9ff;border:1px solid #e2e9fb;border-radius:8px;padding:10px;
+    color:#2c3a57;max-height:220px;overflow:auto;
+  }
+  .copy{
+    margin-top:8px;width:100%;padding:7px;border:1px solid var(--line);background:#fff;
+    border-radius:7px;font-size:12px;color:var(--ink-2);
+  }
+  .copy:hover{border-color:var(--brand);color:var(--brand)}
+  .spinner{
+    width:13px;height:13px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;
+    border-radius:50%;display:inline-block;vertical-align:-2px;margin-right:6px;
+    animation:spin .7s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .toast{
+    position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(10px);
+    background:var(--ink);color:#fff;padding:9px 16px;border-radius:8px;font-size:12.5px;
+    opacity:0;pointer-events:none;transition:.22s;z-index:60;
+  }
+  .toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  @media (max-width:1440px){
+    .app{grid-template-columns:270px minmax(0,1fr) 340px}
+  }
+  @media (max-width:1180px){
+    .app{grid-template-columns:1fr;max-width:860px}
+    .col.left{position:static}
+  }
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="logo"><i></i>MangaDirector Studio <small>表演指导 · 可靠性评测</small></div>
+  <div class="spacer"></div>
+  <span class="pill" id="pillModel">后端：mock</span>
+  <span class="pill" id="pillTau">τ=0.8</span>
+</div>
+
+<div class="app">
+  <!-- ========== 左：剧本与控制 ========== -->
+  <div class="col left">
+    <div class="card">
+      <h3>剧本片段</h3>
+      <select id="sceneSel"></select>
+      <div class="meta-row" id="sceneMeta"></div>
+      <div class="cast" id="castBox"></div>
+    </div>
+
+    <div class="card">
+      <h3>台词</h3>
+      <div class="lines" id="linesBox"></div>
+    </div>
+
+    <div class="card">
+      <h3>怎么演（scaffold）</h3>
+      <div class="seg" id="scaffoldSeg"></div>
+      <div class="field">
+        <label>重复次数 k（每次独立采样）</label>
+        <div class="seg small" id="kSeg"></div>
+      </div>
+      <div class="field">
+        <label>后端</label>
+        <div class="seg small" id="backendSeg">
+          <button data-v="mock" class="on">Mock（离线）</button>
+          <button data-v="api">真实模型</button>
+        </div>
+      </div>
+      <div class="field" id="modelField" style="display:none">
+        <label>模型名（OpenAI 兼容端点）</label>
+        <input type="text" id="modelInput" value="deepseek-chat">
+      </div>
+      <button class="run-btn" id="runBtn">运行导演</button>
+      <div class="hint" id="runHint">Mock 会故意犯四类典型错误，用来验证判卷链路；数字不是实验结果。</div>
+    </div>
+  </div>
+
+  <!-- ========== 中：分镜 ========== -->
+  <div class="col">
+    <div class="card">
+      <div class="scene-head">
+        <div>
+          <h2 id="sceneTitle">—</h2>
+          <div class="sub" id="sceneSub">选一个场景，点「运行导演」</div>
+        </div>
+        <div class="reps" id="reps"></div>
+      </div>
+    </div>
+    <div id="shots">
+      <div class="empty"><b>还没有分镜</b>左侧选场景，点「运行导演」。模型每跑一次就是一个 rep，右上角切换对比。</div>
+    </div>
+  </div>
+
+  <!-- ========== 右：判卷 ========== -->
+  <div class="col">
+    <div class="card">
+      <h3>五臂对比 · 全量 13 场</h3>
+      <div class="hint" style="margin:-4px 0 9px">这一栏跑的是全部 13 场戏，和下面「当前这一场」的判卷是两回事。</div>
+      <button class="copy" id="cmpBtn">跑全部 scaffold（k=3 · 195 次调用）</button>
+      <div id="cmpBox" style="margin-top:10px">
+        <div class="hint">同一批场景，只换「给模型多少上下文」，看通过率怎么变。这是这个项目的主实验。</div>
+      </div>
+      <div class="legend" style="margin-top:8px">
+        <span class="lg"><i style="background:#b9ccff"></i>pass@1（一次能过）</span>
+        <span class="lg"><i style="background:#2f5bea"></i>pass^k（每次都过）</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>这一场的判卷</h3>
+      <div class="kpis" id="kpis">
+        <div class="kpi"><div class="n">—</div><div class="l">pass@1</div></div>
+        <div class="kpi"><div class="n">—</div><div class="l">pass^k</div></div>
+        <div class="kpi"><div class="n">—</div><div class="l">平均命中率</div></div>
+        <div class="kpi"><div class="n">—</div><div class="l">禁令违反</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>逐行 × 逐字段</h3>
+      <div class="scroll"><table id="gridTable"><tbody><tr><td style="color:#8a93a5">运行后显示</td></tr></tbody></table></div>
+    </div>
+
+    <div class="card">
+      <h3>k 次分歧</h3>
+      <div class="scroll"><table id="divTable"><tbody><tr><td style="color:#8a93a5">运行后显示</td></tr></tbody></table></div>
+      <div class="hint">黄底 = k 次取值不一致。同一场戏同一句台词，模型自己都不稳定，这才是 pass^k 要抓的东西。</div>
+    </div>
+
+    <div class="card">
+      <h3>可直接用的提示词</h3>
+      <div class="prompt" id="promptBox">运行后按当前 rep 生成 TTS / 视频提示词。</div>
+      <button class="copy" id="copyBtn">复制全部镜头提示词</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const state = { scenes: [], scene: null, meta: null, k: 3, scaffold: 'card_injected',
+                backend: 'mock', data: null, rep: 0 };
+
+const SCAFFOLD_LABEL = {
+  naive_shot: 'AI 直觉版',
+  card_injected: '角色卡',
+  card_fewshot: '角色卡+示例',
+  card_repair: '角色卡+修复',
+  card_formula: '角色卡+公式',
+};
+const FIELD_LABEL = { intensity:'强度', f0_offset:'音高偏移', f0_range:'音高范围',
+                      rate:'语速', pause_after_ms:'停顿', style:'表情', gaze:'视线', au:'AU' };
+const FIELD_RANGE = { intensity:[0,10], f0_offset:[-4,6], f0_range:[0.5,8],
+                      rate:[2,9], pause_after_ms:[0,2000] };
+
+function toast(msg){
+  const t = $('#toast'); t.textContent = msg; t.classList.add('on');
+  clearTimeout(t._h); t._h = setTimeout(()=>t.classList.remove('on'), 1800);
+}
+async function api(url, opt){
+  const r = await fetch(url, opt);
+  const j = await r.json().catch(()=>({error:'响应不是 JSON'}));
+  if(!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+  return j;
+}
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt = (v, d=2) => (typeof v === 'number' ? (Number.isInteger(v) ? v : v.toFixed(d)) : (v ?? '—'));
+
+/* ---------- 初始化 ---------- */
+async function boot(){
+  try{
+    const [sc, meta] = await Promise.all([api('/api/scenes'), api('/api/meta')]);
+    state.meta = meta;
+    state.scenes = sc.scenes;
+    $('#sceneSel').innerHTML = state.scenes.map(s =>
+      `<option value="${s.scene_id}">${esc(s.title)} · ${s.n_lines} 句</option>`).join('');
+    $('#scaffoldSeg').innerHTML = meta.scaffolds.map(s =>
+      `<button data-v="${s}" class="${s===state.scaffold?'on':''}">${SCAFFOLD_LABEL[s]||s}</button>`).join('');
+    $('#kSeg').innerHTML = [1,2,3,5].map(v =>
+      `<button data-v="${v}" class="${v===state.k?'on':''}">k=${v}</button>`).join('');
+    $('#pillTau').textContent = 'τ=' + meta.tau;
+    $('#pillModel').textContent = meta.api_key_present ? '后端：mock（已检测到 API key）' : '后端：mock（未配置 key）';
+    bind();
+    await loadScene(state.scenes[0].scene_id);
+
+    // ?demo=1&scaffold=card_formula&k=3 直接出结果，方便截图、演示、给别人看
+    const q = new URLSearchParams(location.search);
+    if(q.get('demo')){
+      const sc = q.get('scaffold');
+      if(sc && (meta.scaffolds||[]).includes(sc)){
+        state.scaffold = sc;
+        [...$('#scaffoldSeg').children].forEach(x=>x.classList.toggle('on', x.dataset.v===sc));
+      }
+      const kq = +q.get('k');
+      if(kq){ state.k = Math.max(1, Math.min(8, kq));
+        [...$('#kSeg').children].forEach(x=>x.classList.toggle('on', +x.dataset.v===state.k)); }
+      const sid = q.get('scene');
+      if(sid && state.scenes.some(s=>s.scene_id===sid)) await loadScene(sid);
+      if(q.get('compare')) await runCompare();
+      await run();
+    }
+  }catch(e){ toast('初始化失败：' + e.message); }
+}
+
+function bind(){
+  $('#sceneSel').onchange = e => loadScene(e.target.value);
+  $('#scaffoldSeg').onclick = e => {
+    const b = e.target.closest('button'); if(!b) return;
+    state.scaffold = b.dataset.v;
+    [...$('#scaffoldSeg').children].forEach(x=>x.classList.toggle('on', x===b));
+  };
+  $('#kSeg').onclick = e => {
+    const b = e.target.closest('button'); if(!b) return;
+    state.k = +b.dataset.v;
+    [...$('#kSeg').children].forEach(x=>x.classList.toggle('on', x===b));
+  };
+  $('#backendSeg').onclick = e => {
+    const b = e.target.closest('button'); if(!b) return;
+    state.backend = b.dataset.v;
+    [...$('#backendSeg').children].forEach(x=>x.classList.toggle('on', x===b));
+    const isApi = state.backend === 'api';
+    $('#modelField').style.display = isApi ? 'block' : 'none';
+    $('#runHint').textContent = isApi
+      ? '真实模型：每次调用都花钱，k 越大越贵。先在 mock 上把判卷看顺了再切。'
+      : 'Mock 会故意犯四类典型错误，用来验证判卷链路；数字不是实验结果。';
+    $('#pillModel').textContent = isApi ? '后端：真实模型' : '后端：mock';
+  };
+  $('#runBtn').onclick = run;
+  $('#cmpBtn').onclick = runCompare;
+  $('#copyBtn').onclick = copyPrompt;
+}
+
+/* ---------- 五臂对比 ---------- */
+async function runCompare(){
+  const btn = $('#cmpBtn');
+  btn.disabled = true; const old = btn.innerHTML;
+  btn.innerHTML = '<span class="spinner" style="border-color:#ccd6ee;border-top-color:#2f5bea"></span>正在跑 13 场 × 5 臂…';
+  try{
+    const d = await api('/api/compare', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({k:3, backend:state.backend, model:$('#modelInput').value.trim()||'deepseek-chat'})
+    });
+    const max = Math.max(0.01, ...d.rows.map(r=>r.pass_at_1));
+    const bars = d.rows.map(r => {
+      const w1 = Math.max(1.5, r.pass_at_1 / max * 100);
+      const wk = r.pass_pow_k > 0 ? Math.max(1.5, r.pass_pow_k / max * 100) : 0;
+      return `<div class="cmp-row" title="pass@1 ${(r.pass_at_1*100).toFixed(1)}% · pass^${d.k} ${(r.pass_pow_k*100).toFixed(1)}% · 行级 ${(r.line_pass*100).toFixed(0)}% · 违反率 ${(r.violation_rate*100).toFixed(1)}%">
+        <div class="cmp-lab">${SCAFFOLD_LABEL[r.scaffold]||r.scaffold}</div>
+        <div class="cmp-bar">
+          <div class="p1" style="width:${w1}%"></div>
+          ${wk?`<div class="pk" style="width:${wk}%"></div>`:''}
+        </div>
+        <div class="cmp-num"><b>${(r.pass_at_1*100).toFixed(0)}%</b>/${(r.pass_pow_k*100).toFixed(0)}%</div>
+      </div>`;
+    }).join('');
+    $('#cmpBox').innerHTML = bars +
+      `<div class="hint" style="margin-top:6px">${d.n_scenes} 场 / ${d.n_lines} 句 · k=${d.k} · ${d.backend} · 用时 ${d.elapsed}s · τ=${d.tau}</div>`;
+  }catch(e){
+    $('#cmpBox').innerHTML = `<div class="err">${esc(e.message)}</div>`;
+  }finally{
+    btn.disabled = false; btn.innerHTML = old;
+  }
+}
+
+/* ---------- 场景加载 ---------- */
+async function loadScene(id){
+  const d = await api('/api/scene?id=' + encodeURIComponent(id));
+  state.scene = d; state.data = null; state.rep = 0;
+  $('#sceneTitle').textContent = d.scene.title;
+  $('#sceneSub').textContent = `${d.scene.scene_id} · 作品 ${d.scene.work_id} · ${d.lines.length} 句台词`;
+  $('#sceneMeta').innerHTML = d.scene.scene_types.map(t => {
+    const p = d.scene_profile[t] || {};
+    const shout = p.allow_shout ? '可外放' : '不许喊';
+    return `<div class="grp"><span class="tag b">${esc(t)}</span>` +
+           `<span class="tag">上限 ${p.ceiling ?? '—'}</span>` +
+           `<span class="tag">${shout}</span></div>`;
+  }).join('');
+
+  $('#castBox').innerHTML = Object.entries(d.characters).map(([name, c]) => {
+    const p = c.personality || {};
+    const bar = (lab, v) => `<label>${lab}</label><div class="track"><i style="width:${Math.round((v||0)*100)}%"></i></div><div class="val">${(v??0).toFixed(2)}</div>`;
+    return `<div><div class="who"><b>${esc(name)}</b><span>${esc(c.role||'')} · ${esc(c.voice||'')}</span></div>
+      <div class="bars">${bar('亲和',p.warmth)}${bar('支配',p.dominance)}${bar('活力',p.energy)}${bar('敏感',p.neuroticism)}</div></div>`;
+  }).join('');
+
+  $('#linesBox').innerHTML = d.lines.map((ln, i) => `
+    <div class="line-item">
+      <div class="h"><span>${i+1}. ${esc(ln.character)} → ${esc(ln.listener||'—')}（${esc(ln.relation||'')}）</span><span>${esc(ln.scene_type)}</span></div>
+      <div class="t">${esc(ln.text)}</div>
+      ${ln.subtext ? `<div class="s">潜台词：${esc(ln.subtext)}</div>` : ''}
+    </div>`).join('');
+
+  $('#shots').innerHTML = `<div class="empty"><b>还没有分镜</b>「${esc(d.scene.title)}」已载入，点「运行导演」。</div>`;
+  $('#reps').innerHTML = '';
+  resetRight();
+}
+
+function resetRight(){
+  $('#kpis').innerHTML = ['pass@1','pass^k','平均命中率','禁令违反']
+    .map(l => `<div class="kpi"><div class="n">—</div><div class="l">${l}</div></div>`).join('');
+  $('#gridTable').innerHTML = '<tbody><tr><td style="color:#8a93a5">运行后显示</td></tr></tbody>';
+  $('#divTable').innerHTML = '<tbody><tr><td style="color:#8a93a5">运行后显示</td></tr></tbody>';
+  $('#promptBox').textContent = '运行后按当前 rep 生成 TTS / 视频提示词。';
+}
+
+/* ---------- 运行 ---------- */
+async function run(){
+  if(!state.scene) return;
+  const btn = $('#runBtn');
+  btn.disabled = true;
+  const old = btn.innerHTML;
+  btn.innerHTML = '<span class="spinner"></span>模型在演…';
+  try{
+    const body = {
+      scene_id: state.scene.scene.scene_id,
+      scaffold: state.scaffold,
+      k: state.k,
+      backend: state.backend,
+      model: $('#modelInput').value.trim() || 'deepseek-chat',
+    };
+    const d = await api('/api/run', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)
+    });
+    state.data = d; state.rep = 0;
+    renderAll();
+  }catch(e){
+    toast('运行失败：' + e.message);
+  }finally{
+    btn.disabled = false; btn.innerHTML = old;
+  }
+}
+
+/* ---------- 渲染 ---------- */
+function renderAll(){ renderReps(); renderShots(); renderKpis(); renderGrid(); renderDiverge(); renderPrompt(); }
+
+function renderReps(){
+  const d = state.data;
+  $('#reps').innerHTML = d.runs.map((r, i) =>
+    `<button data-i="${i}" class="${i===state.rep?'on':''} ${r.passed?'pass':'fail'}">${i+1}</button>`).join('');
+  $('#reps').onclick = e => {
+    const b = e.target.closest('button'); if(!b) return;
+    state.rep = +b.dataset.i;
+    renderAll();
+  };
+}
+
+function gauge(label, value, range, opts={}){
+  const [lo, hi] = range;
+  const pct = Math.max(0, Math.min(100, ((value - lo) / (hi - lo)) * 100));
+  const naivePct = opts.naive != null ? Math.max(0, Math.min(100, ((opts.naive - lo)/(hi-lo))*100)) : null;
+  const capPct = opts.cap != null ? Math.max(0, Math.min(100, ((opts.cap - lo)/(hi-lo))*100)) : null;
+  const hot = opts.hot;
+  return `<div class="g">
+    <div class="lab"><span>${label}</span><b>${fmt(value,2)}${opts.unit||''}</b></div>
+    <div class="gbar">
+      <div class="fill ${hot?'hot':''}" style="width:${pct}%"></div>
+      ${naivePct!=null?`<div class="naive" style="left:${naivePct}%" title="AI 直觉版 ${fmt(opts.naive,2)}"></div>`:''}
+      ${capPct!=null?`<div class="cap" style="left:${capPct}%" title="禁令上限 ${opts.cap}"></div>`:''}
+    </div>
+    ${opts.note?`<div class="note">${opts.note}</div>`:''}
+  </div>`;
+}
+
+function renderShots(){
+  const d = state.data;
+  const run = d.runs[state.rep];
+  const byLine = new Map((run.shots||[]).map(s => [s.line_id, s]));
+  const goldByLine = new Map(state.scene.lines.map(x => [x.line_id, x]));
+
+  $('#shots').innerHTML = state.scene.lines.map(ln => {
+    const shot = byLine.get(ln.line_id);
+    const row = run.rows.find(r => r.line_id === ln.line_id) || {};
+    const gold = ln.gold;
+
+    if(!shot){
+      return `<div class="shot"><div class="head"><div class="av">?</div>
+        <div class="txt">${esc(ln.text)}</div><div class="rid">${esc(ln.line_id)}</div></div>
+        <div class="body"><div class="err">这一行缺镜头 —— 模型没有为这句台词输出参数</div></div></div>`;
+    }
+
+    const inNoShout = (shot.constraints||[]).includes('no_shout');
+    const expr = shot.expression || {};
+    const au = expr.au || {};
+    const deltas = row.deltas || {};
+    const hits = row.hits || {};
+
+    const auBars = Object.entries(au).map(([k,v]) =>
+      `<span class="au">${k}<span class="tr"><i style="width:${Math.round((v||0)*100)}%"></i></span></span>`).join('');
+
+    const dots = Object.keys(FIELD_LABEL).map(f => {
+      const cls = hits[f] ? 'hit' : 'miss';
+      const dv = deltas[f];
+      const tip = dv != null ? `误差 ${fmt(dv,2)}` : (hits[f] ? '一致' : '不一致');
+      return `<span class="dot ${cls}" title="${tip}">${FIELD_LABEL[f]}</span>`;
+    }).join('');
+
+    const errs = (row.errors||[]).map(e => `<div class="err">${esc(e)}</div>`).join('');
+    const vios = (row.violations||[]).map(v =>
+      `<div class="vio"><b>违反禁令 ${esc(v.constraint)}</b> · ${esc(v.detail)}</div>`).join('');
+
+    const naive = ln.naive_intensity;
+    const noteBits = `AI 直觉 <em>${fmt(naive,1)}</em> → 校准 <em>${fmt(shot.intensity,1)}</em>（抑制 ${fmt(shot.suppression,2)}）`;
+
+    return `<div class="shot">
+      <div class="head">
+        <div class="av" style="background:${avatarColor(shot.character)}">${esc((shot.character||'?')[0])}</div>
+        <div class="txt">${esc(ln.text)}</div>
+        <div class="rid">${esc(ln.line_id)}</div>
+      </div>
+      <div class="body">
+        <div class="gauges">
+          ${gauge('外部表演强度', shot.intensity, FIELD_RANGE.intensity, {
+              naive: naive, cap: inNoShout ? 6.5 : null, hot: shot.intensity > 6.5,
+              note: noteBits })}
+          ${gauge('音高动态范围', shot.f0_range, FIELD_RANGE.f0_range, {
+              unit:' 半音', cap: inNoShout ? 5.0 : null, hot: shot.f0_range > 5 })}
+          ${gauge('音高偏移', shot.f0_offset, FIELD_RANGE.f0_offset, {unit:' 半音'})}
+          ${gauge('语速', shot.rate, FIELD_RANGE.rate, {unit:' 字/秒'})}
+          ${gauge('句尾停顿', shot.pause_after_ms, FIELD_RANGE.pause_after_ms, {unit:' ms'})}
+          <div class="g">
+            <div class="lab"><span>表情与视线</span><b>${esc(expr.style||'—')}</b></div>
+            <div class="gaze" style="margin-top:8px">${esc(expr.gaze||'—')}</div>
+          </div>
+        </div>
+        <div class="legend">
+          <span class="lg"><i class="ln-naive"></i>AI 直觉版强度</span>
+          ${inNoShout ? '<span class="lg"><i class="ln-cap"></i>禁令上限（不许喊）</span>' : ''}
+        </div>
+
+        <div class="expr">
+          <span class="badge style">${esc(expr.style||'—')}</span>
+          ${(shot.constraints||[]).length
+            ? shot.constraints.map(c=>`<span class="badge ok">${esc(c)}</span>`).join('')
+            : `<span class="badge warn">未声明禁令</span>`}
+          <span class="gaze">${esc(expr.gaze||'')}</span>
+        </div>
+
+        <div class="aus">${auBars}</div>
+
+        ${shot.director_note ? `<div class="quote">${esc(shot.director_note)}</div>` : ''}
+
+        <div class="ev">金标准：强度 <code>${fmt(gold.intensity,2)}</code>
+          · 音高范围 <code>${fmt(gold.f0_range,2)}</code>
+          · 语速 <code>${fmt(gold.rate,2)}</code>
+          · 停顿 <code>${gold.pause_after_ms}</code>
+          · ${esc(gold.expression.style)}</div>
+        <div class="ev">归因证据：<code>${esc(shot.evidence||'—')}</code>${shot.evidence && !ln.text.includes(String(shot.evidence).trim()) ? ' <span style="color:#c62828">（不是原文子串）</span>' : ''}</div>
+
+        <div class="judge">
+          <div class="dots">${dots}</div>
+          ${errs}${vios}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+const PALETTE = ['#3d5a99','#8a5a3c','#3f7a63','#6b4a8a','#8a4a52','#4a6b8a'];
+function avatarColor(name){
+  let h = 0; for(const c of String(name||'')) h = (h*31 + c.charCodeAt(0)) % 997;
+  return PALETTE[h % PALETTE.length];
+}
+
+function renderKpis(){
+  const d = state.data, s = d.summary;
+  const kpi = (n, l, cls='') => `<div class="kpi ${cls}"><div class="n">${n}</div><div class="l">${l}</div></div>`;
+  $('#kpis').innerHTML =
+    kpi((s.pass_at_1*100).toFixed(0)+'%', `pass@1（${d.k} 次里过 ${Math.round(s.pass_at_1*d.k)} 次）`, s.pass_at_1>0?'good':'bad') +
+    kpi((s.pass_pow_k*100).toFixed(0)+'%', `pass^${d.k}（每次都过）`, s.pass_pow_k>0?'good':'bad') +
+    kpi((s.mean_hit_rate*100).toFixed(1)+'%', '平均参数命中率') +
+    kpi(s.violations, '禁令违反（行）', s.violations?'bad':'good');
+}
+
+function renderGrid(){
+  const d = state.data;
+  const fields = Object.keys(FIELD_LABEL);
+  const rows = d.runs[state.rep].rows;
+  const head = `<thead><tr><th>字段 \\ 镜头</th>${
+    rows.map(r=>`<th style="text-align:center">${esc(r.line_id.replace(/^.*-/,''))}</th>`).join('')}</tr></thead>`;
+  const body = fields.map(f => {
+    const cells = rows.map(r => {
+      const dv = (r.deltas||{})[f];
+      const tip = dv != null ? `误差 ${fmt(dv,3)}` : (r.hits[f] ? '一致' : '不一致');
+      return `<td class="${r.hits[f]?'hit':'miss'}" style="text-align:center" title="${tip}">${r.hits[f]?'✓':'✗'}</td>`;
+    }).join('');
+    return `<tr><td>${FIELD_LABEL[f]}</td>${cells}</tr>`;
+  }).join('');
+  $('#gridTable').innerHTML = head + '<tbody>' + body + '</tbody>';
+}
+
+function renderDiverge(){
+  const d = state.data;
+  const fields = Object.keys(FIELD_LABEL);
+  const head = `<thead><tr><th>镜头 / 字段</th>${d.runs.map((_,i)=>`<th style="text-align:center">r${i+1}</th>`).join('')}</tr></thead>`;
+  let body = '';
+  for(const ln of state.scene.lines){
+    const rows = (d.diverge[ln.line_id] || []).filter(r => fields.includes(r.field));
+    rows.forEach((r, idx) => {
+      body += `<tr><td style="${idx===0?'border-top:1px solid #dfe4ee;':''}">${
+          idx===0 ? `<span style="color:#8a93a5">${esc(ln.line_id.replace(/^.*-/,''))}</span> ` : ''
+        }${FIELD_LABEL[r.field]}</td>` +
+        r.values.map(v=>`<td class="num ${r.distinct>1?'diff':''}" title="${esc(v ?? '缺失')}">${fmt(v,2)}</td>`).join('') + `</tr>`;
+    });
+  }
+  $('#divTable').innerHTML = head + '<tbody>' + body + '</tbody>';
+}
+
+function shotToPrompt(shot, ln){
+  const e = shot.expression || {}, au = e.au || {};
+  const tts = `【TTS】角色 ${shot.character}｜强度 ${fmt(shot.intensity,1)}/10｜音高偏移 ${fmt(shot.f0_offset,2)} 半音｜` +
+    `音高范围 ${fmt(shot.f0_range,2)} 半音｜语速 ${fmt(shot.rate,1)} 字/秒｜句尾停顿 ${shot.pause_after_ms}ms｜` +
+    `${e.style}${(shot.constraints||[]).includes('no_shout') ? '·不许喊' : ''}`;
+  const vid = `【视频】表情 ${e.style}｜AU4=${fmt(au.AU4,2)} AU12=${fmt(au.AU12,2)} AU17=${fmt(au.AU17,2)} ` +
+    `AU20=${fmt(au.AU20,2)} AU26=${fmt(au.AU26,2)}｜视线：${e.gaze}`;
+  return `${ln.line_id}  「${ln.text}」\n${tts}\n${vid}\n备注：${shot.director_note || '—'}`;
+}
+
+function renderPrompt(){
+  const run = state.data.runs[state.rep];
+  const byLine = new Map((run.shots||[]).map(s=>[s.line_id,s]));
+  const blocks = state.scene.lines.filter(ln=>byLine.has(ln.line_id))
+    .map(ln => shotToPrompt(byLine.get(ln.line_id), ln));
+  $('#promptBox').textContent = blocks.join('\n\n') || '这一 rep 没有可用镜头。';
+}
+
+function copyPrompt(){
+  const txt = $('#promptBox').textContent;
+  navigator.clipboard.writeText(txt).then(()=>toast('已复制 ' + txt.length + ' 字符'))
+    .catch(()=>toast('复制失败，请手动选择'));
+}
+
+boot();
+</script>
+</body>
+</html>
