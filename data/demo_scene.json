@@ -1,0 +1,62 @@
+{
+  "title": "示例漫剧：雨夜告白",
+  "characters": {
+    "沈砚": {
+      "role": "男主",
+      "voice": "低沉青年男声，气声偏多",
+      "personality": { "warmth": 0.35, "dominance": 0.65, "energy": 0.25, "neuroticism": 0.55 }
+    },
+    "林小满": {
+      "role": "女主",
+      "voice": "清亮少女声",
+      "personality": { "warmth": 0.8, "dominance": 0.35, "energy": 0.85, "neuroticism": 0.45 }
+    },
+    "老周": {
+      "role": "师父",
+      "voice": "中年沙哑男声",
+      "personality": { "warmth": 0.5, "dominance": 0.9, "energy": 0.75, "neuroticism": 0.2 }
+    }
+  },
+  "lines": [
+    {
+      "id": "S01-L01",
+      "character": "林小满",
+      "scene": "雨夜屋檐下",
+      "scene_type": "亲密低语",
+      "listener": "沈砚",
+      "relation": "恋人未满",
+      "text": "……我刚才说的那些，你听到了吗？",
+      "subtext": "其实心跳很快，怕被拒绝"
+    },
+    {
+      "id": "S01-L02",
+      "character": "沈砚",
+      "scene": "雨夜屋檐下",
+      "scene_type": "亲密低语",
+      "listener": "林小满",
+      "relation": "恋人未满",
+      "text": "……我知道了。",
+      "subtext": "其实心跳很快，但说不出口"
+    },
+    {
+      "id": "S01-L03",
+      "character": "老周",
+      "scene": "演武场，众人围观",
+      "scene_type": "冲突对峙",
+      "listener": "沈砚",
+      "relation": "长辈",
+      "text": "你说什么？再说一次！",
+      "subtext": "当众被顶撞，怒但需维持威严"
+    },
+    {
+      "id": "S01-L04",
+      "character": "林小满",
+      "scene": "街头，看到流浪猫",
+      "scene_type": "日常",
+      "listener": "沈砚",
+      "relation": "挚友",
+      "text": "哇——好可爱！",
+      "subtext": "纯粹的开心"
+    }
+  ]
+}
