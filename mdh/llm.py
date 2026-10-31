@@ -13,11 +13,14 @@ from __future__ import annotations
 import json
 import os
 import random
+import socket
+import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
 
 from . import reference as ref
+from . import schema
 
 
 @dataclass
@@ -37,6 +40,32 @@ def _est_tokens(s: str) -> int:
     return max(1, int(len(s) / 1.6))
 
 
+def _load_dotenv() -> None:
+    """读取项目根目录的 .env（KEY=VALUE）。
+
+    已存在的环境变量优先，所以临时 export 的 key 总能覆盖文件里的。
+    key 只落在 .env 里，不进代码、不进仓库（.gitignore 已排除）。
+    """
+    path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"
+    )
+    if not os.path.exists(path):
+        return
+    try:
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                k, v = line.split("=", 1)
+                k = k.strip()
+                v = v.strip().strip('"').strip("'")
+                if k and k not in os.environ:
+                    os.environ[k] = v
+    except OSError:
+        pass
+
+
 # --------------------------------------------------------------------------
 # 真实后端
 # --------------------------------------------------------------------------
@@ -45,7 +74,9 @@ class OpenAICompat:
 
     def __init__(self, model: str, base_url: str | None = None,
                  api_key: str | None = None, temperature: float = 0.7,
-                 seed: int | None = None, timeout: int = 120):
+                 seed: int | None = None, timeout: int = 120,
+                 max_tokens: int | None = None, max_retries: int = 3):
+        _load_dotenv()
         self.model = model
         self.base_url = (base_url or os.environ.get("MDH_BASE_URL")
                          or os.environ.get("DAH_BASE_URL")
@@ -60,31 +91,60 @@ class OpenAICompat:
         self.temperature = temperature
         self.seed = seed
         self.timeout = timeout
+        # 显式给输出上限。部分厂商把默认 max_tokens 设成上下文全长，
+        # 不传就可能 400（项目一撞过 GLM 的这个坑）；一镜到底的 JSON 用 2048 绰绰有余。
+        self.max_tokens = max_tokens or int(os.environ.get("MDH_MAX_TOKENS", "2048"))
+        self.max_retries = max_retries
 
     def complete(self, messages: list[dict], meta: dict | None = None) -> LLMResult:
         body = {
             "model": self.model,
             "messages": messages,
             "temperature": self.temperature,
+            "max_tokens": self.max_tokens,
         }
         if self.seed is not None:
             body["seed"] = self.seed
-        req = urllib.request.Request(
-            f"{self.base_url}/chat/completions",
-            data=json.dumps(body).encode("utf-8"),
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {self.api_key}",
-            },
-        )
-        try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
-                payload = json.loads(resp.read().decode("utf-8"))
-        except urllib.error.HTTPError as e:
-            detail = e.read().decode("utf-8", "ignore")[:500]
-            raise RuntimeError(f"HTTP {e.code}: {detail}") from e
+        data = json.dumps(body).encode("utf-8")
 
-        text = payload["choices"][0]["message"]["content"]
+        payload = None
+        for attempt in range(self.max_retries + 1):
+            req = urllib.request.Request(
+                f"{self.base_url}/chat/completions",
+                data=data,
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {self.api_key}",
+                },
+            )
+            try:
+                with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+                    payload = json.loads(resp.read().decode("utf-8"))
+                break
+            except urllib.error.HTTPError as e:
+                detail = e.read().decode("utf-8", "ignore")[:500]
+                # 429 限流与 5xx 是"跑长任务必然遇到"的瞬时错误，退避重试；
+                # 4xx 里的其余情况（401/400/402）重试没有意义，直接抛。
+                if e.code in (408, 409, 429, 500, 502, 503, 504) and attempt < self.max_retries:
+                    wait = min(2 ** attempt * 2, 30)
+                    print(f"    [重试 {attempt + 1}/{self.max_retries}] HTTP {e.code}，{wait}s 后重试")
+                    time.sleep(wait)
+                    continue
+                raise RuntimeError(f"HTTP {e.code}: {detail}") from e
+            except (urllib.error.URLError, socket.timeout, TimeoutError) as e:
+                if attempt < self.max_retries:
+                    wait = min(2 ** attempt * 2, 30)
+                    print(f"    [重试 {attempt + 1}/{self.max_retries}] 网络错误 {e}，{wait}s 后重试")
+                    time.sleep(wait)
+                    continue
+                raise RuntimeError(f"网络错误：{e}") from e
+
+        if payload is None:
+            raise RuntimeError("请求失败：重试次数用尽")
+
+        msg = payload["choices"][0]["message"]
+        # 推理型模型有时把内容放在 reasoning_content，content 为空
+        text = msg.get("content") or msg.get("reasoning_content") or ""
         usage = payload.get("usage", {})
         return LLMResult(
             text=text,
@@ -177,6 +237,15 @@ class MockDirector:
         repeat = int(meta.get("repeat", 0))
         prompt = str(messages)
 
+        if scaffold in ("judge_plain", "judge_cue"):
+            text = self._appraisal(scene, scaffold, repeat, attempt)
+            return LLMResult(
+                text=text,
+                tokens_in=_est_tokens(prompt),
+                tokens_out=_est_tokens(text),
+                meta={"model": self.name, "attempt": attempt},
+            )
+
         shots = []
         for line in scene["lines"]:
             gold = ref.gold_shot(line, scene["characters"])
@@ -211,6 +280,42 @@ class MockDirector:
             tokens_out=_est_tokens(text),
             meta={"model": self.name, "attempt": attempt},
         )
+
+    def _appraisal(self, scene: dict, scaffold: str, repeat: int, attempt: int) -> str:
+        """判读层的 Mock：注入"唤醒度读不准 + 意图误判 + 归因改写"三类缺陷。
+
+        缺陷率按臂给：给了线索表的臂（judge_cue）读得更准一点，
+        但仍然会偏——这是真实模型的形态，不是"给了表就满分"。
+        """
+        plain = scaffold == "judge_plain"
+        p_shift = 0.55 if plain else 0.22
+        p_intent = 0.35 if plain else 0.15
+        p_ev = 0.05 if plain else 0.03
+
+        out = []
+        for line in scene["lines"]:
+            g = ref.appraise(line["text"], line.get("subtext", ""))
+            rng = random.Random(f"{scene['scene_id']}|{line['id']}|{scaffold}|{repeat}|{attempt}")
+            arousal = g["arousal"]
+            if rng.random() < p_shift:
+                mag = rng.uniform(1.5, 3.5) if plain else rng.uniform(0.5, 1.8)
+                arousal = round(min(10.0, max(0.0, arousal + (mag if rng.random() < 0.5 else -mag))), 2)
+
+            intent = g["intent"]
+            if rng.random() < p_intent:
+                intent = rng.choice([x for x in schema.INTENTS if x != g["intent"]])
+
+            evidence = line["text"] if rng.random() > p_ev else line["text"][:max(2, len(line["text"]) // 3)]
+
+            out.append({
+                "line_id": line["id"],
+                "arousal": arousal,
+                "valence": g["valence"],
+                "intent": intent,
+                "evidence": evidence,
+            })
+
+        return json.dumps({"scene_id": scene["scene_id"], "lines": out}, ensure_ascii=False, indent=2)
 
     @staticmethod
     def _draw_bad(scaffold: str, attempt: int, rng: random.Random) -> int:

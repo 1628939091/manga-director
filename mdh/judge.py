@@ -35,9 +35,53 @@ DEFAULT_TOL = {
 
 DEFAULT_TAU = 0.8
 
+# 判读层容差：与 8 字段容差同理，是显式设计变量。
+# arousal 1.0 = 10 分制下的"一档"，与 intensity 的 0.8 同量级；
+# valence 0.3 是因为金标准的 valence 只有 9 个离散取值，0.3 约等于相邻两档。
+APPRAISAL_TOL = {"arousal": 1.0, "valence": 0.3}
+
 
 def _num_hit(actual: float, gold: float, tol: float) -> bool:
     return abs(actual - gold) <= tol
+
+
+def judge_appraisal(appr: dict, line: dict, gold: dict,
+                    tol: dict | None = None) -> dict:
+    """判一条**判读**结果（两层架构的第一层）。
+
+    只比 3 个语义量 + 归因有效性，不比任何派生参数——
+    派生参数在两层架构里由代码算出，比它等于比自己的函数，没有信息量。
+
+    金标准取 `gold["_internal"]`（reference.appraise 的输出），
+    注意它本身是关键词表的产物，所以这里的"命中"只意味着
+    "与我的规则表一致"，不等于"判对了"。报告里必须说明。
+    """
+    tol = {**APPRAISAL_TOL, **(tol or {})}
+    internal = gold.get("_internal") or {}
+    hits: dict[str, bool] = {}
+    deltas: dict[str, float] = {}
+    signed: dict[str, float] = {}
+
+    if not isinstance(appr, dict):
+        return {"hits": {}, "deltas": {}, "signed": {}, "errors": ["判读结果不是对象"]}
+
+    for k in ("arousal", "valence"):
+        g = internal.get(k)
+        v = appr.get(k)
+        if g is None or not isinstance(v, (int, float)) or isinstance(v, bool):
+            hits[k] = False
+            continue
+        d = abs(float(v) - float(g))
+        deltas[k] = round(d, 4)
+        # 带符号偏差：MAE 相同但"系统性偏高 1.5 分"与"随机抖动 ±1.5"是两回事，
+        # 前者可以靠常数校正，后者不能。必须分开报。
+        signed[k] = round(float(v) - float(g), 4)
+        hits[k] = d <= tol[k]
+
+    hits["intent"] = appr.get("intent") == internal.get("intent")
+    hits["evidence"] = not schema.check_evidence(appr.get("evidence", ""), line["text"])
+
+    return {"hits": hits, "deltas": deltas, "signed": signed, "errors": []}
 
 
 def judge_line(shot: dict, line: dict, gold: dict, tol: dict | None = None) -> dict:

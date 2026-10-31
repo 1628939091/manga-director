@@ -7,6 +7,7 @@ __pycache__/
 # 运行产物：逐次记录可重跑、体积大，不入库；
 # 但 report.md 是交付物，要入库（因此不在此忽略）
 outputs/*.jsonl
+outputs/*.log
 
 # 本地密钥
 .env

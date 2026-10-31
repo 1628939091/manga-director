@@ -25,10 +25,15 @@ from __future__ import annotations
 import json
 import re
 
+from . import pipeline
 from . import reference as ref
 from . import schema
 
-SCAFFOLDS = ("naive_shot", "card_injected", "card_fewshot", "card_repair", "card_formula")
+SCAFFOLDS = ("naive_shot", "card_injected", "card_fewshot", "card_repair",
+             "card_formula", "judge_plain", "judge_cue")
+
+# 两层架构的两个臂：模型只判读，标定由 pipeline 完成
+JUDGE_SCAFFOLDS = ("judge_plain", "judge_cue")
 
 
 # --------------------------------------------------------------------------
@@ -146,8 +151,109 @@ def _render_card(name: str, card: dict) -> str:
             f"energy={p.get('energy')} neuroticism={p.get('neuroticism')}")
 
 
+# --------------------------------------------------------------------------
+# 判读层（两层架构的第一层）
+# --------------------------------------------------------------------------
+INTENT_GLOSS = {
+    "威胁": "放狠话、压迫对方",
+    "认错": "道歉、服软",
+    "挽留": "求对方别走、别放弃",
+    "表白/安抚": "表达喜欢，或安慰对方",
+    "隐忍": "把情绪压下去，敷衍、应付",
+    "玩笑": "打趣、调侃、自嘲",
+    "惊喜": "惊叹、赞叹",
+    "危机": "危险、紧急、来不及",
+    "质疑": "反问、不服、追问",
+    "忐忑": "紧张、不安、怕被拒绝",
+    "陈述": "平铺直叙，没有明显情绪",
+}
+
+APPRAISAL_SYSTEM = (
+    "你是漫剧的表演指导助手，本轮只负责一件事：**读出台词背后的内心状态**。"
+    "外部表演参数（强度、音高、语速、停顿、表情）由下游系统按公式计算，"
+    "你不需要、也不允许输出它们。只输出 JSON。"
+)
+
+APPRAISAL_DOC = """输出格式（一场戏一次）：
+{"scene_id": "<场景id>", "lines": [
+  {"line_id": "<台词id>",
+   "arousal": 0-10 的**内心**唤醒强度（不是外部表现强度；
+              内心汹涌但表面克制，arousal 仍然高）,
+   "valence": -1~1 的情绪效价（负=难受/敌意，正=愉悦/亲近）,
+   "intent": "从下面的枚举里选一个",
+   "evidence": "该台词原文的一个连续子串，用来证明你的判断有依据"}
+]}
+
+intent 枚举（必须逐字使用，只能选一个）：
+""" + "\n".join(f"- {k}：{v}" for k, v in INTENT_GLOSS.items())
+
+CUE_TABLE_DOC = """参考：台词线索 → 内心唤醒（可借鉴，但不要机械套用）
+威胁类（滚/闭嘴/你敢/最后一遍/再说一次）≈8.6；认错类（对不起/是我的错/我认）≈5.2；
+挽留类（别走/等等/求你）≈7.4；表白安抚类（我喜欢你/想你/别怕/我在）≈6.2；
+隐忍类（嗯/知道了/随便/随你）≈4.0；玩笑类（哈哈/笑死/真的假的）≈6.8；
+惊喜类（哇/好可爱/太棒/天哪/好美/好厉害）≈7.2；危机类（死/血/来不及/快跑）≈9.0；
+质疑类（为什么/凭什么/你说什么）≈7.8；都不匹配≈5.0。
+潜台词里出现 心跳/其实/忍住/怕/紧张 时，arousal 再 +1.2（上限 10）。"""
+
+
+def build_appraisal_prompt(task: dict, scaffold: str) -> list[dict]:
+    lines = task["lines"]
+    parts: list[str] = [f"场次：{task['title']}（scene_id={task['scene_id']}）", "", "角色卡："]
+    for name, card in task["characters"].items():
+        parts.append(_render_card(name, card))
+
+    parts.append("")
+    parts.append("台词列表：")
+    for ln in lines:
+        parts.append(
+            f"- id={ln['id']} 角色={ln['character']} 场景={ln.get('scene_type')} "
+            f"关系={ln.get('relation')} 对{ln.get('listener', '—')}说：「{ln['text']}」"
+            + (f"（潜台词：{ln['subtext']}）" if ln.get("subtext") else "")
+        )
+
+    parts.append("")
+    parts.append(
+        "为每条台词判断：说这句话的人**内心**有多激烈（arousal）、"
+        "情绪是正还是负（valence）、这句话在做什么（intent）。"
+    )
+    if scaffold == "judge_cue":
+        parts.append("")
+        parts.append(CUE_TABLE_DOC)
+    parts.append("")
+    parts.append(APPRAISAL_DOC)
+    parts.append("")
+    parts.append(f"现在为 {task['scene_id']} 的 {len(lines)} 条台词输出判读结果。")
+    return [{"role": "system", "content": APPRAISAL_SYSTEM},
+            {"role": "user", "content": "\n".join(parts)}]
+
+
+def appraisal_feedback(output: dict, task: dict) -> list[str]:
+    """判读层的 L1 反馈：结构、区间、枚举、归因。同样不泄露金标准。"""
+    if not isinstance(output, dict):
+        return ["输出不是 JSON 对象"]
+    raw = output.get("lines") if isinstance(output.get("lines"), list) else output.get("shots")
+    if not isinstance(raw, list):
+        return ["输出缺少 lines 数组"]
+
+    by_id = {x.get("line_id"): x for x in raw if isinstance(x, dict)}
+    msgs: list[str] = []
+    for ln in task["lines"]:
+        item = by_id.get(ln["id"])
+        if item is None:
+            msgs.append(f"{ln['id']}: 缺这条台词的判读")
+            continue
+        msgs.extend(f"{ln['id']}: {e}" for e in schema.validate_appraisal(item))
+        if isinstance(item.get("evidence"), str):
+            msgs.extend(f"{ln['id']}: {e}"
+                        for e in schema.check_evidence(item["evidence"], ln["text"]))
+    return msgs
+
+
 def build_prompt(task: dict, scaffold: str,
                  examples: list[dict] | None = None) -> list[dict]:
+    if scaffold in JUDGE_SCAFFOLDS:
+        return build_appraisal_prompt(task, scaffold)
+
     lines = task["lines"]
     scene_types = {ln.get("scene_type", "日常") for ln in lines}
 
@@ -241,6 +347,7 @@ def run_scaffold(task: dict, scaffold: str, llm, examples: list[dict] | None = N
     if scaffold not in SCAFFOLDS:
         raise ValueError(f"未知 scaffold: {scaffold}")
 
+    judge_mode = scaffold in JUDGE_SCAFFOLDS
     messages = build_prompt(task, scaffold, examples)
     trace: list[dict] = []
     tokens_in = tokens_out = 0
@@ -253,11 +360,15 @@ def run_scaffold(task: dict, scaffold: str, llm, examples: list[dict] | None = N
                                            "attempt": attempt, "repeat": repeat})
         tokens_in += res.tokens_in
         tokens_out += res.tokens_out
-        output = extract_json(res.text)
-        trace.append({"attempt": attempt, "raw_head": res.text[:180]})
+        text = res.text
+        # 判读层偶尔会把 JSON 包在散文里，且 reasoning 模型可能把答案放在 reasoning_content
+        output = extract_json(text)
+        trace.append({"attempt": attempt, "raw_head": text[:180]})
 
         if output is None:
             feedback = ["输出不是合法 JSON，请只输出 JSON 对象"]
+        elif judge_mode:
+            feedback = appraisal_feedback(output, task)
         else:
             feedback = l1_feedback(output, task)
 
@@ -269,14 +380,20 @@ def run_scaffold(task: dict, scaffold: str, llm, examples: list[dict] | None = N
         if attempt == max_repair:
             break
         messages = messages + [
-            {"role": "assistant", "content": res.text},
+            {"role": "assistant", "content": text},
             {"role": "user", "content":
                 "上面的输出有这些问题，请修正后重新输出**完整** JSON：\n- "
                 + "\n- ".join(feedback[:12])},
         ]
 
+    appraisal = output if judge_mode else None
+    if judge_mode:
+        # 第二层：判读 → 标定 → 完整契约。走同一个 compose，参数不与模型协商。
+        output = pipeline.compose_scene(appraisal or {}, task)
+
     return {
         "output": output,
+        "appraisal": appraisal,
         "trace": trace,
         "attempts": attempts,
         "tokens_in": tokens_in,

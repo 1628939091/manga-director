@@ -35,6 +35,8 @@
 
 from __future__ import annotations
 
+import re
+
 # --------------------------------------------------------------------------
 # 枚举（封闭集合，便于严格判等；开放式文本无法判等，是评测设计的第一号坑）
 # --------------------------------------------------------------------------
@@ -140,13 +142,76 @@ def validate_shot(obj: object) -> list[str]:
 
 
 def check_evidence(evidence: str, text: str) -> list[str]:
-    """L1b：归因校验。evidence 必须是台词原文的子串（去空白后比较）。"""
+    """L1b：归因校验。evidence 必须是台词原文的子串。
+
+    归一化：去空白 + 去引号/括注标点。模型引用台词时常补 「」『』""
+    等外层引号或句尾标点，这不算幻觉；只有引入原文没有的字词才算。
+    """
     if not isinstance(evidence, str):
         return ["evidence 不是字符串"]
-    norm = lambda s: "".join(s.split())
-    ev = norm(evidence)
+    strip = "，。？！、；：""''「」『』…—·,.?!;:\"'"
+    clean = lambda s: "".join(ch for ch in s if not ch.isspace() and ch not in strip)
+    # 全角括号整块视为模型的标注（如「（潜台词：…）」），不参与引文比对；
+    # 但只允许出现在开头/结尾，夹在引文中间的括号仍算违规（可能藏真幻觉）
+    ev = re.sub(r"^（[^）]*）|（[^）]*）$", "", evidence)
+    ev = clean(ev)
     if not ev:
         return ["evidence 为空"]
-    if ev not in norm(text):
+    if ev not in clean(text):
         return [f"evidence {evidence!r} 不是台词原文的子串（幻觉归因）"]
     return []
+
+
+# ==========================================================================
+# 判读层契约（appraisal）
+# ==========================================================================
+# 为什么要单独一个契约
+# -------------------
+# 8 个表演参数里，只有 arousal 是"读台词"读出来的，其余 7 个都是
+# arousal × 性格 × 场景 的确定性函数（见 reference.calibrate）。
+# 让 LLM 一次吐出 8 个字段，等于让它同时做判读和算术；
+# 195 次真实运行证明它算不准（见 outputs/analysis_real_v32.md 第 4 节）。
+# 所以第二层拆出来：模型只输出下面 4 个字段，标定交回确定性代码。
+#
+# INTENTS 必须与 reference.CUE_TABLE 的标签**逐字一致**，
+# 否则"意图准确率"会因为标签写法不同而虚低。
+INTENTS = (
+    "威胁", "认错", "挽留", "表白/安抚", "隐忍", "玩笑",
+    "惊喜", "危机", "质疑", "忐忑", "陈述",
+)
+
+APPRAISAL_RANGES = {"arousal": (0.0, 10.0), "valence": (-1.0, 1.0)}
+
+APPR_REQUIRED = ("line_id", "arousal", "valence", "intent", "evidence")
+
+
+def validate_appraisal(obj: object) -> list[str]:
+    """判读层的 L1：结构、区间、枚举、归因。不依赖金标准。"""
+    errs: list[str] = []
+    if not isinstance(obj, dict):
+        return [f"判读结果不是对象，而是 {type(obj).__name__}"]
+
+    for f in APPR_REQUIRED:
+        if f not in obj:
+            errs.append(f"缺字段 {f}")
+    if errs:
+        return errs
+
+    if not isinstance(obj["line_id"], str) or not obj["line_id"]:
+        errs.append("line_id 必须是非空字符串")
+
+    for k, (lo, hi) in APPRAISAL_RANGES.items():
+        v = obj[k]
+        if not isinstance(v, (int, float)) or isinstance(v, bool):
+            errs.append(f"{k} 必须是数值，得到 {type(v).__name__}")
+        elif not (lo <= v <= hi):
+            errs.append(f"{k}={v} 越界 [{lo},{hi}]")
+
+    if obj["intent"] not in INTENTS:
+        errs.append(f"intent={obj['intent']!r} 不在枚举内")
+
+    ev = obj["evidence"]
+    if not isinstance(ev, str) or not ev.strip():
+        errs.append("evidence 必须是非空字符串")
+
+    return errs

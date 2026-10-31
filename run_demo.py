@@ -70,6 +70,7 @@ def main(argv: list[str]) -> int:
         eval_tasks, list(SCAFFOLDS), backend, k=k,
         tau=judge.DEFAULT_TAU,
         examples_for=runner.make_example_provider(pool, n=2),
+        workers=int(os.environ.get("MDH_WORKERS", "1")),
     )
 
     os.makedirs(OUT_DIR, exist_ok=True)

@@ -35,8 +35,14 @@ class TestSchema(unittest.TestCase):
         self.assertEqual(schema.check_evidence(ln["text"], ln["text"]), [])
         # 省略号/空格差异应被容忍（归一化后比较）
         self.assertEqual(schema.check_evidence("刚才说的那些，你听到了吗", ln["text"]), [])
+        # 外层引号 / 句尾括注 = 模型的引用格式，不算幻觉
+        self.assertEqual(schema.check_evidence(f"「{ln['text']}」", ln["text"]), [])
+        self.assertEqual(schema.check_evidence(ln["text"] + "（压低）", ln["text"]), [])
+        # 引文中间夹括号 = 可疑（可能藏真幻觉）
+        self.assertTrue(schema.check_evidence(
+            "你听到了吗（压低）那些", ln["text"]))
         # 改写 = 幻觉
-        self.assertTrue(schema.check_evidence(ln["text"] + "（压低）", ln["text"]))
+        self.assertTrue(schema.check_evidence(ln["text"] + "其实心跳很快", ln["text"]))
 
     def test_range_and_enum(self):
         task = demo_task()

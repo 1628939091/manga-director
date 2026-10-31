@@ -28,7 +28,7 @@ from urllib.parse import urlparse, parse_qs
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from mdh import agents, judge, llm, runner, tasks  # noqa: E402
+from mdh import agents, judge, llm, metrics, runner, tasks  # noqa: E402
 from mdh import reference as ref  # noqa: E402
 from mdh import schema  # noqa: E402
 
@@ -37,9 +37,33 @@ STATIC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 SCENES = tasks.build_tasks(n_generated=12)
 BY_ID = {t["scene_id"]: t for t in SCENES}
 
+RUN_K_MAX = 8        # 单场：一次只跑一场戏，k 大一点也还快
+COMPARE_K_MAX = 5    # 全量：13 场 × 5 臂 × k，同步请求扛不住更大的 k
+
+# 只缓存 mock：mock 是确定性的，重算没有新信息；
+# 真实模型每次点击都应该是**新采样的 k 次**，缓存会悄悄毁掉 pass^k 的语义。
+_COMPARE_CACHE: dict[str, dict] = {}
+
 _PUBLIC_GOLD = ("line_id", "character", "intensity", "suppression", "f0_offset",
                 "f0_range", "rate", "pause_after_ms", "expression", "constraints",
                 "evidence", "director_note")
+
+
+def _safe_static_path(rel: str) -> str | None:
+    """/static/<rel> -> 安全路径；越界返回 None。
+
+    只挡 ".." 是不够的：os.path.join 遇到绝对路径会**丢弃左边**，
+    所以 /static/D:/secret.txt 会解析到静态目录之外。
+    """
+    static = os.path.realpath(STATIC)
+    target = os.path.realpath(os.path.join(static, rel))
+    if target == static or not target.startswith(static + os.sep):
+        return None
+    return target
+
+
+def _invalid_scaffolds(names) -> list[str]:
+    return [n for n in names if n not in agents.SCAFFOLDS]
 
 
 def _gold_bundle(task: dict) -> list[dict]:
@@ -139,10 +163,10 @@ class Handler(BaseHTTPRequestHandler):
         if p in ("/", "/index.html"):
             return self._file(os.path.join(STATIC, "index.html"))
         if p.startswith("/static/"):
-            rel = p[len("/static/"):]
-            if ".." in rel:
+            target = _safe_static_path(p[len("/static/"):])
+            if target is None:
                 return self._json({"error": "bad path"}, 400)
-            return self._file(os.path.join(STATIC, rel))
+            return self._file(target)
         if p == "/api/scenes":
             return self._json({"scenes": [_scene_brief(t) for t in SCENES]})
         if p == "/api/scene":
@@ -187,7 +211,7 @@ class Handler(BaseHTTPRequestHandler):
 
         sid = body.get("scene_id") or ""
         scaffold = body.get("scaffold") or "card_injected"
-        k = max(1, min(8, int(body.get("k") or 3)))
+        k = max(1, min(RUN_K_MAX, int(body.get("k") or 3)))
         backend_name = body.get("backend") or "mock"
         model = body.get("model") or "deepseek-chat"
 
@@ -264,10 +288,23 @@ class Handler(BaseHTTPRequestHandler):
         except (ValueError, UnicodeDecodeError) as e:
             return self._json({"error": f"请求体不是合法 JSON：{e}"}, 400)
 
-        k = max(1, min(5, int(body.get("k") or 3)))
+        k = max(1, min(COMPARE_K_MAX, int(body.get("k") or 3)))
         backend_name = body.get("backend") or "mock"
         model = body.get("model") or "deepseek-chat"
         only = body.get("scaffolds") or list(agents.SCAFFOLDS)
+        if not isinstance(only, list) or not only:
+            return self._json({"error": "scaffolds 必须是非空数组"}, 400)
+        bad = _invalid_scaffolds(only)
+        if bad:
+            return self._json({"error": f"未知 scaffold: {bad}",
+                               "valid": list(agents.SCAFFOLDS)}, 400)
+
+        cache_key = json.dumps({"backend": backend_name, "model": model,
+                                "k": k, "scaffolds": only}, sort_keys=True)
+        if backend_name != "api":
+            hit = _COMPARE_CACHE.get(cache_key)
+            if hit is not None:
+                return self._json({**hit, "cached": True})
 
         if backend_name == "api":
             try:
@@ -277,28 +314,31 @@ class Handler(BaseHTTPRequestHandler):
         else:
             backend = llm.MockDirector()
 
-        from mdh import metrics
         rows = []
         t0 = time.time()
-        for scaffold in only:
-            records = runner.run_matrix(SCENES, [scaffold], backend, k=k,
-                                        verbose=False,
-                                        examples_for=runner.make_example_provider(SCENES, 2))
-            lo, hi, point = metrics.pass_ci(records, scaffold)
-            rows.append({
-                "scaffold": scaffold,
-                "pass_at_1": round(metrics.pass_at_1(records, scaffold), 4),
-                "pass_at_1_ci": [lo, hi],
-                "pass_pow_k": round(metrics.pass_pow_k(records, scaffold), 4),
-                "line_pass": round(metrics.line_level_pass(records, scaffold), 4),
-                "hit_rate": round(metrics.mean_hit_rate(records, scaffold), 4),
-                "l1_clean": round(metrics.l1_clean_rate(records, scaffold), 4),
-                "violation_rate": round(metrics.violation_rate(records, scaffold), 4),
-                "tokens": round(metrics.mean_tokens(records, scaffold), 1),
-                "attempts": round(metrics.mean_attempts(records, scaffold), 2),
-            })
+        try:
+            for scaffold in only:
+                records = runner.run_matrix(SCENES, [scaffold], backend, k=k,
+                                            verbose=False,
+                                            examples_for=runner.make_example_provider(SCENES, 2))
+                lo, hi, point = metrics.pass_ci(records, scaffold)
+                rows.append({
+                    "scaffold": scaffold,
+                    "pass_at_1": round(metrics.pass_at_1(records, scaffold), 4),
+                    "pass_at_1_ci": [lo, hi],
+                    "pass_pow_k": round(metrics.pass_pow_k(records, scaffold), 4),
+                    "line_pass": round(metrics.line_level_pass(records, scaffold), 4),
+                    "hit_rate": round(metrics.mean_hit_rate(records, scaffold), 4),
+                    "l1_clean": round(metrics.l1_clean_rate(records, scaffold), 4),
+                    "violation_rate": round(metrics.violation_rate(records, scaffold), 4),
+                    "tokens": round(metrics.mean_tokens(records, scaffold), 1),
+                    "attempts": round(metrics.mean_attempts(records, scaffold), 2),
+                })
+        except Exception as e:  # 不让一次失败把连接掐断（前端只会看到网络错误）
+            return self._json(
+                {"error": f"评测执行失败：{type(e).__name__}: {e}"}, 500)
 
-        return self._json({
+        payload = {
             "backend": backend_name,
             "model": getattr(backend, "model", getattr(backend, "name", "-")),
             "k": k,
@@ -307,7 +347,10 @@ class Handler(BaseHTTPRequestHandler):
             "tau": judge.DEFAULT_TAU,
             "elapsed": round(time.time() - t0, 1),
             "rows": rows,
-        })
+        }
+        if backend_name != "api":
+            _COMPARE_CACHE[cache_key] = payload
+        return self._json(payload)
 
 
 def main() -> int:
