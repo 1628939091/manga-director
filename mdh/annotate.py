@@ -354,12 +354,19 @@ def cmd_score(records_path: str = RECORDS) -> int:
     L.append("")
     L.append("## 0. 结论先行")
     L.append("")
+    if n < 20:
+        # 少量标注时 κ 极不稳定（两行样本能让 κ 从 -0.7 跳到 +0.7），
+        # 这时给结论是误导。只提示样本不足，不下判断。
+        L.append(f"> ⚠️ **样本只有 {n} 行，κ 还不稳定**，下面的数字只用来验证流程是否跑通，"
+                 "不要据此下结论。建议至少标到 60 行再看趋势。")
+        L.append("")
     L.append(f"- arousal（10 档，二次加权 κ）：**{_fmt(k_aro)}**；"
              f"秩相关 ρ = {_fmt(rho)}；±1 档内比例 {_fmt(None if exact_aro is None else exact_aro * 100, 1)}%")
     L.append(f"- valence（5 档，二次加权 κ）：**{_fmt(k_val)}**")
     L.append(f"- intent（{len(set(r_int) | set(h_int))} 类，名义 κ）：**{_fmt(k_int)}**")
     L.append("")
-    L.append(_verdict(k_aro, k_int))
+    L.append(_verdict(k_aro, k_int) if n >= 20 else
+             "> 样本不足 20 行，暂不给判断。")
     L.append("")
     L.append("## 1. 两把尺子的绝对差")
     L.append("")

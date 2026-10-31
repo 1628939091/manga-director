@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>标注台 · 人标 vs 规则尺</title>
+<style>
+  :root{
+    --bg:#f5f6f8; --panel:#ffffff; --line:#e3e6ec; --line-soft:#eef0f4;
+    --ink:#141a24; --ink-2:#4b5566; --ink-3:#8a93a5;
+    --brand:#2f5bea; --brand-soft:#eaf0ff;
+    --ok:#12805c; --ok-soft:#e6f6ef;
+    --warn:#b26a00; --warn-soft:#fdf3e2;
+    --bad:#c62828; --bad-soft:#fdecec;
+    --mono:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;
+    --radius:10px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%}
+  body{
+    background:var(--bg);color:var(--ink);
+    font:14px/1.6 -apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  button{font:inherit;cursor:pointer;border:1px solid var(--line);background:#fff;color:var(--ink);
+    border-radius:8px;padding:8px 12px;transition:.12s}
+  button:hover{border-color:#c3cbd8}
+  button.primary{background:var(--brand);border-color:var(--brand);color:#fff}
+  button.primary:hover{filter:brightness(1.06)}
+  button.ghost{background:transparent}
+
+  /* 顶栏 */
+  .top{position:sticky;top:0;z-index:10;height:56px;display:flex;align-items:center;gap:14px;
+    padding:0 18px;background:var(--panel);border-bottom:1px solid var(--line)}
+  .logo{display:flex;align-items:center;gap:9px;font-weight:700}
+  .logo i{width:22px;height:22px;border-radius:6px;background:linear-gradient(135deg,#2f5bea,#7c3aed)}
+  .logo small{font-weight:500;color:var(--ink-3);font-size:12px}
+  .top .spacer{flex:1}
+  .prog{width:190px;height:7px;border-radius:99px;background:#e9ecf2;overflow:hidden}
+  .prog i{display:block;height:100%;width:0;background:linear-gradient(90deg,#2f5bea,#7c3aed)}
+  .count{font-variant-numeric:tabular-nums;color:var(--ink-2);font-size:13px}
+
+  /* 主体 */
+  .wrap{max-width:900px;margin:0 auto;padding:22px 18px 60px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:20px}
+
+  .meta{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px}
+  .chip{font-size:12px;padding:3px 10px;border-radius:999px;background:#f2f4f8;
+    border:1px solid var(--line);color:var(--ink-2)}
+  .chip b{color:var(--ink);font-weight:600}
+  .chip.scene{background:var(--brand-soft);border-color:#cfdcff;color:#2f5bea}
+
+  .line{font-size:27px;line-height:1.5;font-weight:600;letter-spacing:.5px;margin:6px 0 8px}
+  .sub{color:var(--ink-3);font-size:14px}
+  .sub b{color:var(--ink-2);font-weight:500}
+
+  .steps{margin-top:24px;display:flex;flex-direction:column;gap:14px}
+  .step{border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:#fcfdff}
+  .step.active{border-color:#b9c9ff;background:#f7f9ff;box-shadow:0 0 0 3px #eef3ff}
+  .step.done{opacity:.62}
+  .step h4{margin:0 0 10px;font-size:12.5px;font-weight:600;color:var(--ink-2);
+    display:flex;align-items:center;gap:8px}
+  .step h4 em{font-style:normal;color:var(--ink-3);font-weight:400;font-size:12px}
+  .opts{display:flex;flex-wrap:wrap;gap:7px}
+  .opt{min-width:44px;text-align:center;padding:7px 9px;border-radius:8px;border:1px solid var(--line);
+    background:#fff;font-variant-numeric:tabular-nums}
+  .opt kbd{display:block;font:11px/1 var(--mono);color:var(--ink-3);margin-top:3px}
+  .opt.on{background:var(--brand);border-color:var(--brand);color:#fff}
+  .opt.on kbd{color:#cfdcff}
+  .opt.wide{min-width:96px}
+  .val{font:600 15px var(--mono);color:var(--brand);margin-left:10px}
+  .hint{font-size:12px;color:var(--ink-3);margin-top:9px}
+
+  /* 底栏 */
+  .bar{position:fixed;left:0;right:0;bottom:0;background:rgba(255,255,255,.94);
+    backdrop-filter:blur(6px);border-top:1px solid var(--line);padding:10px 18px;
+    display:flex;align-items:center;gap:10px;z-index:10}
+  .bar .spacer{flex:1}
+  .bar input{width:74px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;
+    font:inherit;text-align:center}
+  .keys{font-size:12px;color:var(--ink-3)}
+  .keys kbd{font:11px var(--mono);border:1px solid var(--line);border-bottom-width:2px;
+    border-radius:5px;padding:1px 5px;background:#fff;color:var(--ink-2)}
+
+  /* 报告 */
+  .report{margin-top:18px}
+  .report pre{background:#fbfcfe;border:1px solid var(--line);border-radius:10px;padding:16px;
+    white-space:pre-wrap;word-break:break-word;font:12.5px/1.75 var(--mono);overflow:auto;max-height:60vh}
+  .banner{padding:12px 14px;border-radius:10px;font-size:13px;margin-bottom:12px}
+  .banner.warn{background:var(--warn-soft);border:1px solid #f0dcb8;color:#7a4a00}
+  .banner.ok{background:var(--ok-soft);border:1px solid #c8ebdb;color:#0f6b4d}
+  .toast{position:fixed;left:50%;bottom:74px;transform:translateX(-50%);background:#141a24;color:#fff;
+    padding:8px 16px;border-radius:999px;font-size:13px;opacity:0;pointer-events:none;transition:.2s}
+  .toast.show{opacity:.94}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="logo"><i></i>标注台 <small>人标 vs 规则尺</small></div>
+  <div class="spacer"></div>
+  <div class="prog"><i id="prog"></i></div>
+  <div class="count" id="count">— / —</div>
+</div>
+
+<div class="wrap">
+  <div class="card" id="card">
+    <div class="meta" id="meta"></div>
+    <div class="line" id="line">载入中…</div>
+    <div class="sub" id="sub"></div>
+    <div class="steps" id="steps"></div>
+  </div>
+  <div class="report" id="report" style="display:none"></div>
+</div>
+
+<div class="bar">
+  <button class="ghost" id="prev">← 上一句</button>
+  <button class="ghost" id="skip">跳过</button>
+  <button class="primary" id="next">下一句 →</button>
+  <div class="spacer"></div>
+  <span class="keys">
+    <kbd>1-0</kbd>唤醒度 <kbd>A-G</kbd>效价 <kbd>1-0</kbd><kbd>Q</kbd>意图 <kbd>⏎</kbd>确认 <kbd>⌫</kbd>上一句 <kbd>空格</kbd>跳过
+  </span>
+  <input id="jump" placeholder="序号" title="跳到第几句">
+  <button id="score">算出 κ</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const state = {items: [], intents: [], i: 0, stage: 'arousal',
+               a: null, v: null, t: null, filled: 0};
+
+const VALS = [-1, -0.5, 0, 0.5, 1];
+const VKEYS = ['a', 's', 'd', 'f', 'g'];
+
+function toast(msg){
+  const el = $('#toast'); el.textContent = msg; el.classList.add('show');
+  clearTimeout(toast._t); toast._t = setTimeout(() => el.classList.remove('show'), 1400);
+}
+
+async function boot(){
+  const r = await fetch('/api/items');
+  const d = await r.json();
+  state.items = d.items; state.intents = d.intents; state.filled = d.filled;
+  const first = state.items.findIndex(it => !it.arousal && !it.valence && !it.intent);
+  state.i = first < 0 ? 0 : first;
+  loadRow(true);
+  paint();
+}
+
+function loadRow(resetStage){
+  const it = state.items[state.i];
+  if (!it) return;
+  state.a = it.arousal === '' ? null : Number(it.arousal);
+  state.v = it.valence === '' ? null : Number(it.valence);
+  state.t = it.intent || null;
+  if (resetStage) state.stage = state.t ? 'intent' : 'arousal';
+  paint();
+}
+
+function paint(){
+  const it = state.items[state.i];
+  if (!it) return;
+
+  $('#meta').innerHTML = `
+    <span class="chip scene"><b>${esc(it.scene)}</b> · ${esc(it.scene_type)}</span>
+    <span class="chip">${esc(it.character)} → ${esc(it.listener)}</span>
+    <span class="chip">关系：<b>${esc(it.relation)}</b></span>
+    <span class="chip">第 ${it.row} 句 / 共 ${state.items.length}</span>`;
+  $('#line').textContent = it.text;
+  $('#sub').innerHTML = it.subtext ? `潜台词：<b>${esc(it.subtext)}</b>` : '';
+
+  // ---- 三步 ----
+  const aDone = state.a !== null, vDone = state.v !== null, tDone = !!state.t;
+  const cls = (name, done) => 'step' + (state.stage === name ? ' active' : (done ? ' done' : ''));
+
+  let h = '';
+  h += `<div class="${cls('arousal', aDone)}"><h4>① 唤醒度 arousal
+        <em>内心有多激动，不是表现得多激烈</em></h4><div class="opts">`;
+  for (let n = 1; n <= 10; n++){
+    const on = state.a === n ? ' on' : '';
+    h += `<button class="opt${on}" data-a="${n}">${n}<kbd>${n === 10 ? 0 : n}</kbd></button>`;
+  }
+  h += `</div><div class="hint">1–2 放空 ｜ 3–4 平静 ｜ 5–6 专注或隐忍 ｜ 7–8 紧张急切 ｜ 9–10 濒临失控</div></div>`;
+
+  h += `<div class="${cls('valence', vDone)}"><h4>② 情绪效价 valence
+        <em>-1 极度负面 → +1 极度正面</em>
+        <span class="val">${state.v === null ? '—' : (state.v > 0 ? '+' : '') + state.v.toFixed(1)}</span>
+        </h4><div class="opts">`;
+  VALS.forEach((v, k) => {
+    const on = state.v === v ? ' on' : '';
+    h += `<button class="opt wide${on}" data-v="${v}">${v > 0 ? '+' + v : v}<kbd>${VKEYS[k].toUpperCase()}</kbd></button>`;
+  });
+  h += `</div><div class="hint">先用 A/S/D/F/G 定档，再用 ← → 每次调 0.1；⏎ 进入下一步</div></div>`;
+
+  h += `<div class="${cls('intent', tDone)}"><h4>③ 主导意图 intent
+        <em>这句话在推动剧情上最主要的那一个</em></h4><div class="opts">`;
+  state.intents.forEach((name, k) => {
+    const key = k < 9 ? String(k + 1) : (k === 9 ? '0' : 'Q');
+    const on = state.t === name ? ' on' : '';
+    h += `<button class="opt wide${on}" data-t="${esc(name)}">${esc(name)}<kbd>${key}</kbd></button>`;
+  });
+  h += `</div><div class="hint">选完自动存盘并跳下一句</div></div>`;
+
+  $('#steps').innerHTML = h;
+
+  $('#count').textContent = `${state.filled} / ${state.items.length}`;
+  $('#prog').style.width = (state.filled / state.items.length * 100) + '%';
+}
+
+function esc(s){
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+async function save(thenNext){
+  const it = state.items[state.i];
+  const body = {
+    line_id: it.line_id,
+    arousal: state.a === null ? '' : state.a,
+    valence: state.v === null ? '' : state.v,
+    intent: state.t || '',
+  };
+  const r = await fetch('/api/save', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(body)});
+  const d = await r.json();
+  if (!d.ok){ toast(d.error || '保存失败'); return; }
+  state.filled = d.filled;
+  it.arousal = body.arousal === '' ? '' : String(body.arousal);
+  it.valence = body.valence === '' ? '' : String(body.valence);
+  it.intent = body.intent;
+  if (thenNext) go(1);
+  else paint();
+}
+
+function go(delta){
+  const j = state.i + delta;
+  if (j < 0) { toast('已经是第一句'); return; }
+  if (j >= state.items.length) { finish(); return; }
+  state.i = j; loadRow(true);
+}
+
+function finish(){
+  const rest = state.items.filter(it => !it.arousal && !it.valence && !it.intent).length;
+  const box = $('#report');
+  box.style.display = 'block';
+  box.innerHTML = `<div class="banner ${rest ? 'warn' : 'ok'}">
+    已填 ${state.filled} / ${state.items.length} 行${rest ? `，还剩 ${rest} 行没填` : '，全部填完'}。
+    可以随时点右下角「算出 κ」看当前一致性。</div>`;
+  box.scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+/* ---------------- 键盘 ---------------- */
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  const k = e.key;
+
+  if (k === 'Backspace'){ e.preventDefault(); go(-1); return; }
+  if (k === ' '){ e.preventDefault(); state.a = state.v = state.t = null;
+                  save(true); return; }
+  if (k === 'Enter'){ e.preventDefault();
+                      if (state.stage === 'arousal'){ state.stage = 'valence'; paint(); }
+                      else if (state.stage === 'valence'){ state.stage = 'intent'; paint(); }
+                      else save(true);
+                      return; }
+
+  if (state.stage === 'arousal'){
+    if (/^[0-9]$/.test(k)){
+      state.a = k === '0' ? 10 : Number(k);
+      state.stage = 'valence'; paint(); return;
+    }
+  } else if (state.stage === 'valence'){
+    if (k === 'ArrowLeft' || k === 'ArrowRight'){
+      e.preventDefault();
+      const step = (k === 'ArrowRight' ? 1 : -1) * 0.1;
+      let v = (state.v === null ? 0 : state.v) + step;
+      state.v = Math.max(-1, Math.min(1, Math.round(v * 10) / 10));
+      paint(); return;
+    }
+    const vi = VKEYS.indexOf(k.toLowerCase());
+    if (vi >= 0){ state.v = VALS[vi]; state.stage = 'intent'; paint(); return; }
+  } else if (state.stage === 'intent'){
+    let idx = -1;
+    if (/^[1-9]$/.test(k)) idx = Number(k) - 1;
+    else if (k === '0') idx = 9;
+    else if (k.toLowerCase() === 'q') idx = 10;
+    if (idx >= 0 && idx < state.intents.length){
+      state.t = state.intents[idx]; save(true); return;
+    }
+  }
+});
+
+/* ---------------- 鼠标 ---------------- */
+document.addEventListener('click', e => {
+  const b = e.target.closest('.opt');
+  if (!b) return;
+  if (b.dataset.a){ state.a = Number(b.dataset.a); state.stage = 'valence'; paint(); return; }
+  if (b.dataset.v){ state.v = Number(b.dataset.v); state.stage = 'intent'; paint();
+                    save(false); return; }
+  if (b.dataset.t){ state.t = b.dataset.t; save(true); return; }
+});
+
+$('#prev').onclick = () => go(-1);
+$('#next').onclick = () => save(true);
+$('#skip').onclick = () => { state.a = state.v = state.t = null; save(true); };
+$('#jump').onchange = e => {
+  const n = Number(e.target.value);
+  if (!n) return;
+  const idx = state.items.findIndex(it => Number(it.row) === n);
+  if (idx >= 0){ state.i = idx; loadRow(true); } else toast('没有这一句');
+  e.target.value = '';
+};
+$('#score').onclick = async () => {
+  $('#score').disabled = true; $('#score').textContent = '计算中…';
+  const r = await fetch('/api/score', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'});
+  const d = await r.json();
+  const box = $('#report'); box.style.display = 'block';
+  if (!d.ok){
+    box.innerHTML = `<div class="banner warn">${esc(d.error || '计算失败')}</div>`;
+  } else {
+    box.innerHTML = `<div class="banner ${state.filled < state.items.length ? 'warn' : 'ok'}">
+      已填 ${state.filled} / ${state.items.length} 行。下面是当前一致性检验结果，
+      完整报告另存于 <code>annotations/human_gold_report.md</code>。</div>
+      <pre>${esc(d.md)}</pre>`;
+    box.scrollIntoView({behavior:'smooth', block:'start'});
+  }
+  $('#score').disabled = false; $('#score').textContent = '算出 κ';
+};
+
+boot();
+</script>
+</body>
+</html>

@@ -75,11 +75,22 @@ MDH_N_SCENES=50 MDH_WORKERS=4 python run_two_layer.py api 3 # 扩规模 + 并发
 
 ### 人工标注（唯一必须你本人做的事）
 
+两种填法，任选：
+
 ```bash
-python annotate.py export      # → annotations/form.csv（166 行，不含规则答案）
-# 填 arousal / valence / intent 三列，指南见 annotations/标注指南.md
-python annotate.py score       # 算 κ，并用人类金标重算模型 MAE
+# ① 标注台（推荐）：一句一屏，全键盘
+python web/annotate_server.py       # → http://127.0.0.1:8771
+#   1-0 选唤醒度 → A/S/D/F/G 选效价（←→ 微调 0.1）→ 1-0/Q 选意图
+#   选完自动存盘并跳下一句；⌫ 上一句、空格跳过、⏎ 确认；右下角「算出 κ」随时看结果
+
+# ② 直接用 Excel 填表
+python annotate.py export           # → annotations/form.csv（166 行，不含规则答案）
+#   只填 arousal / valence / intent 三列，别动其他列
+python annotate.py score            # 算 κ，并用人类金标重算模型 MAE
 ```
+
+两种填法写的是同一张 `annotations/form.csv`——标注台每按一次键就整表重写一次，
+所以中途换工具也不会对不上。标注指南见 `annotations/标注指南.md`。
 
 为什么非要人填：`reference.appraise()` 只吃 `text + subtext`，**看不见场景与关系**。
 所以此前的 arousal MAE 只能读作「与关键词表的一致率」，不是准确率。
@@ -214,8 +225,10 @@ manga-director/
 ├── annotate.py            # 人工标注：export 出表 / score 算 κ 并换尺子重算
 ├── check_lines.py         # 台词库体检：桶分布 / 重复率 / arousal 离散度
 ├── web/
-│   ├── server.py          # 零依赖单页端（标准库 http.server）
-│   └── static/index.html  # 分镜 + 判卷 + 五臂对比，一屏三用
+│   ├── server.py          # 零依赖单页端：看结果（8770）
+│   ├── annotate_server.py # 标注台：干活的页面（8771）
+│   ├── static/index.html  # 分镜 + 判卷 + 五臂对比，一屏三用
+│   └── static/annotate.html  # 一句一屏的标注界面
 ├── mdh/
 │   ├── schema.py          # 参数契约 + 结构/归因校验
 │   ├── reference.py       # 金标准（移植自 director/，零 LLM）
