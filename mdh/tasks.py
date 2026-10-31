@@ -90,6 +90,39 @@ def make_scene(scene_id: str, work_id: str, title: str, cast: list[str],
     }
 
 
+# 身份辈分：师父 > 男主/女主/对手 > 后辈
+SENIORITY = {"师父": 3, "男主": 1, "女主": 1, "对手": 1, "后辈": 0}
+
+
+def relation_of(speaker: str, listener: str, scene_type: str, rng) -> str:
+    """由两个人的身份推出关系，而不是从候选集里随机抽。
+
+    2026-10-31 的教训：原来 `relation = rng.choice(tpl["relations"])`，
+    结果出现「后辈称师父为上级」「师徒互称恋人」「非对手角色互称对手」，
+    170 行里 43 行不自洽（25%）。因子独立抽样、缺语义约束，是这个数据生成器
+    第三次犯同类错误（前两次：随机潜台词、neutral 写成动作）。
+    """
+    sr = ARCHETYPES[speaker]["role"]
+    lr = ARCHETYPES[listener]["role"]
+    s, l = SENIORITY.get(sr, 1), SENIORITY.get(lr, 1)
+
+    if s > l:
+        return "长辈" if sr == "师父" else "上级"
+    if s < l:
+        return "晚辈"
+
+    # 平辈：按场景类型挑，且只在合理时给「对手」
+    rivals = "对手" in (sr, lr)
+    if scene_type == "亲密低语":
+        return rng.choice(["恋人", "恋人未满", "挚友"])
+    opts = ["挚友", "陌生人"]
+    if scene_type in ("日常", "玩笑打闹"):
+        opts += ["恋人", "恋人未满"]
+    if rivals:
+        opts.append("对手")
+    return rng.choice(opts)
+
+
 def generate_scenes(n: int = 50, seed: int = 20261030, scenes_per_work: int = 2) -> list[dict]:
     """受控因子组合生成场景。确定性（固定 seed），可复现。
 
@@ -132,10 +165,12 @@ def generate_scenes(n: int = 50, seed: int = 20261030, scenes_per_work: int = 2)
             used.add(text)
             speaker = cast[j % len(cast)]
             listener = cast[(j + 1) % len(cast)]
-            relation = rng.choice(tpl["relations"])
-            # 让关系修正只在合理的方向上生效（长辈/上级不会出现在恋人关系里）
-            if relation in ("恋人", "恋人未满") and speaker == "威严师父":
-                relation = "长辈"
+            # 仍然消耗一次 rng，保持后续抽样流与历史版本完全一致——
+            # 否则 cast / 台词 / 行数会全部重排，已有人工标注定会变成孤儿。
+            rng.choice(tpl["relations"])
+            # 关系另用独立 rng，由 scene/line/角色 决定，可复现且不影响主流。
+            rel_rng = random.Random(f"{scene_id}|{j}|{speaker}|{listener}")
+            relation = relation_of(speaker, listener, st, rel_rng)
             # 潜台词与台词逐句配对（lines.py 里成对写好），不再随机抽短语：
             # 随机抽会把「表面平静，心里没底」配给「这猫好可爱」，而潜台词
             # 会进 reference.appraise() 的加成分支——等于用随机数改写金标
