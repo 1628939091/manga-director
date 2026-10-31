@@ -66,6 +66,48 @@ def _rows(records: list[dict], scaffold: str):
             yield r, row
 
 
+# --------------------------------------------------------------------------
+# 台词级聚类：行不是独立刺激，一句台词才是
+# --------------------------------------------------------------------------
+# generate_scenes 只保证「同一作品内不重复」，而 50 场 × 3.33 行 ≈ 170 行
+# 的需求大于台词库的 139 句，跨作品必然复用同一句台词（实测 170 行里只有
+# 107 个不同台词、45 句出现 2~4 次）。同一句台词+同一条潜台词出现在多个
+# 场景里，是同一道题出了好几遍——聚类的单位必须是台词，不是场景。
+_LINE_TEXT: dict[tuple[str, str], str] | None = None
+
+
+def line_text_map() -> dict[tuple[str, str], str]:
+    """(scene_id, form_line_id) -> 台词原文，读自 annotations/form.csv。"""
+    global _LINE_TEXT
+    if _LINE_TEXT is None:
+        import csv
+        from mdh.annotate import FORM
+        m: dict[tuple[str, str], str] = {}
+        with open(FORM, encoding="utf-8-sig", newline="") as f:
+            for r in csv.DictReader(f):
+                m[(r["scene_id"], r["line_id"])] = r["台词"]
+        _LINE_TEXT = m
+    return _LINE_TEXT
+
+
+def _cluster_key(r: dict, row: dict) -> str:
+    """一行记录 → 聚类键。优先台词原文（同句台词跨场景共享一簇）；
+    form.csv 查不到时退回场景键，按旧口径聚类。"""
+    rid = row.get("line_id", "")
+    m = line_text_map()
+    for cand in (f"{r['scene_id']}-{rid.split('-')[-1]}", f"{r['scene_id']}-{rid}"):
+        t = m.get((r["scene_id"], cand))
+        if t:
+            return "T::" + t
+    return "S::" + r["scene_id"]
+
+
+def n_line_clusters(records: list[dict], scaffold: str) -> int:
+    """有效刺激数：该臂覆盖了多少个不同台词（含跨场景复用去重）。"""
+    keys = {_cluster_key(r, row) for r, row in _rows(records, scaffold) if row.get("hits")}
+    return len(keys)
+
+
 def field_hits(records: list[dict], scaffold: str) -> dict[str, tuple[int, int]]:
     out = {f: [0, 0] for f in FIELDS}
     for _, row in _rows(records, scaffold):
@@ -77,12 +119,20 @@ def field_hits(records: list[dict], scaffold: str) -> dict[str, tuple[int, int]]
 
 
 def field_hit_ci(records: list[dict], scaffold: str, field: str) -> tuple[float, float, float]:
-    """按场景聚类的 95% CI：同一场戏的多行共用角色卡与场景规范，不独立。"""
+    """场景×台词双路聚类、取较宽的 95% CI。
+
+    两层不独立都要管：同一场戏的多行共用角色卡（场景内相关），
+    同一句台词跨作品复用——170 行里只有 107 个不同台词，是同一道题出了
+    好几遍（跨场景相关）。两种单维聚类各自漏一种，取较宽者保守。
+    """
     by_scene: dict[str, list[float]] = {}
+    by_text: dict[str, list[float]] = {}
     for r, row in _rows(records, scaffold):
         if field in row["hits"]:
-            by_scene.setdefault(r["scene_id"], []).append(1.0 if row["hits"][field] else 0.0)
-    return metrics.cluster_bootstrap_ci(by_scene)
+            v = 1.0 if row["hits"][field] else 0.0
+            by_scene.setdefault(r["scene_id"], []).append(v)
+            by_text.setdefault(_cluster_key(r, row), []).append(v)
+    return metrics.dual_cluster_ci(by_scene, by_text)
 
 
 def scene_scores(records: list[dict], scaffold: str) -> dict[str, list[float]]:
@@ -95,7 +145,12 @@ def scene_scores(records: list[dict], scaffold: str) -> dict[str, list[float]]:
 
 
 def scene_mean_ci(records: list[dict], scaffold: str) -> tuple[float, float, float]:
-    """每场先对 k 次取均值，再按场景聚类 Bootstrap。"""
+    """每场先对 k 次取均值，再按场景聚类 Bootstrap。
+
+    这是「场景平均命中率」这个统计量自己的口径——分析单元是场，
+    场是合法的采样单元。行级指标的 CI 走 field_hit_ci 的台词聚类。
+    跨场景台词重复对这个统计量的残余影响在报告「局限」一节声明。
+    """
     per_scene = {k: [sum(v) / len(v)] for k, v in scene_scores(records, scaffold).items()}
     return metrics.cluster_bootstrap_ci(per_scene)
 
@@ -320,7 +375,7 @@ def render_real(records: list[dict], meta: dict) -> str:
     L.append("")
 
     # ---------------- 3 ----------------
-    L.append("## 3. 逐字段命中率（带按场景聚类的 95% CI）")
+    L.append("## 3. 逐字段命中率（带场景×台词双路聚类的 95% CI）")
     L.append("")
     head = "| scaffold | " + " | ".join(FIELD_CN[f] for f in FIELDS) + " |"
     L.append(head)
@@ -343,8 +398,10 @@ def render_real(records: list[dict], meta: dict) -> str:
         for f in FIELDS:
             L.append(f"| {FIELD_CN[f]} | {_ci(field_hit_ci(records, target, f))} |")
         L.append("")
-        L.append(f"> 上表是 `{target}`。区间按场景聚类（{n_scene} 个簇），"
-                 "所以宽度反映的是「换一批戏还成不成立」，不是「行数够不够」。")
+        L.append(f"> 上表是 `{target}`。区间取「场景聚类」与「台词聚类」两路中较宽者"
+                 f"（{n_scene} 场 / {n_line_clusters(records, target)} 句不同台词——"
+                 "45 句台词跨作品复用 2~4 次，独立刺激是台词不是行）。"
+                 "宽度反映的是「换一批台词还成不成立」，不是「行数够不够」。")
         L.append("")
 
     # ---------------- 4 ----------------
@@ -443,6 +500,7 @@ def appraisal_stats(records: list[dict], scaffold: str) -> dict:
     bias: list[float] = []
     hits = {f: [0, 0] for f in APPR_FIELDS}
     per_scene: dict[str, list[float]] = {}
+    per_scene_sc: dict[str, list[float]] = {}
     for r in records:
         if r["scaffold"] != scaffold or not r.get("appraisal"):
             continue
@@ -462,13 +520,16 @@ def appraisal_stats(records: list[dict], scaffold: str) -> dict:
                     if f == "arousal":
                         scene_ok.append(1.0 if row["hits"][f] else 0.0)
         if scene_ok:
-            per_scene.setdefault(r["scene_id"], []).append(sum(scene_ok) / len(scene_ok))
+            v = sum(scene_ok) / len(scene_ok)
+            per_scene.setdefault(_cluster_key(r, row), []).append(v)
+            per_scene_sc.setdefault(r["scene_id"], []).append(v)
     return {
         "arousal_mae": sum(mae) / len(mae) if mae else 0.0,
         "arousal_bias": sum(bias) / len(bias) if bias else 0.0,
         "arousal_exact": exact / nd if nd else 0.0,
         "hits": {f: (h, n) for f, (h, n) in hits.items()},
         "per_scene": per_scene,
+        "per_scene_sc": per_scene_sc,
         "n": nd,
     }
 
@@ -598,9 +659,10 @@ def render_two_layer(records: list[dict], meta: dict, baseline: list[dict] | Non
     for s in scs:
         st_ = appraisal_stats(records, s)
         if st_["per_scene"]:
-            per = {kk: [sum(vv) / len(vv)] for kk, vv in st_["per_scene"].items()}
-            L.append(f"- `{s}` 的 arousal 行级命中率（按场景聚类 95% CI）："
-                     f"{_ci(metrics.cluster_bootstrap_ci(per))}")
+            per_t = {kk: [sum(vv) / len(vv)] for kk, vv in st_["per_scene"].items()}
+            per_s = {kk: [sum(vv) / len(vv)] for kk, vv in st_["per_scene_sc"].items()}
+            L.append(f"- `{s}` 的 arousal 行级命中率（场景×台词双路聚类取较宽 95% CI）："
+                     f"{_ci(metrics.dual_cluster_ci(per_s, per_t))}")
     L.append("")
     L.append("> ⚠️ 金标准 arousal 来自 `reference.appraise()` 的**关键词表**（9 个桶 + 默认值）。"
              "所以「命中」的意思是「和我的规则表一致」，不是「判对了」。"
@@ -753,7 +815,11 @@ def render_two_layer(records: list[dict], meta: dict, baseline: list[dict] | Non
     L.append("- **判读层的金标准是规则，不是人。** 结论只能表述为"
              "「与参考实现的关键词表一致率」，不能表述为「情绪判读准确率」。"
              "补人工标注 + κ 才能变成能力结论。")
-    L.append(f"- **样本仍不算大**：{n_scene} 场 / {n_lines} 行。"
+    L.append(f"- **样本仍不算大**：{n_scene} 场 / {n_lines} 行，"
+             f"其中**独立刺激只有约 {n_line_clusters(records, scs[0])} 句台词**——"
+             "台词库 139 句 < 170 行需求，`generate_scenes` 跨作品复用同一句台词"
+             "（45 句出现 2~4 次，多数连潜台词都相同）。"
+             "行级指标因此按台词聚类 bootstrap，不能把 170 行当独立样本。"
              "一场约等于几个百分点，臂间小于这个量级的差距不要下结论。")
     L.append("- **台词库是模板偏置的**：台词按线索桶设计，措辞比真实剧本更「线索密集」，"
              "所以绝对准确率会偏高。它测的是「能不能按线索对齐」，不是「能不能读真实剧本」。")

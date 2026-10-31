@@ -5,10 +5,13 @@
 1. **pass@1 与 pass^k 是回答两个不同的问题。**
    pass@1 问"一次能不能过"，pass^k 问"每次都能过吗"。
    生产环境要的是后者：一场戏错了，观众看到的就是错的。
-2. **CI 必须按场景聚类。** 同一场戏的多条台词不独立（共用角色卡与场景规范），
-   把行当独立样本会把 CI 算窄——这是项目一 deff≈3.3 那个坑的同构版本。
+2. **CI 必须双路聚类取较宽。** 依赖结构是二维的，单维聚类各自漏一种：
+   同一场戏的多行共用角色卡（场景内相关）；同一句台词跨作品复用——
+   170 行需求 > 台词库 139 句，45 句台词出现 2~4 次（跨场景相关）。
+   两路各 bootstrap 一次、取更宽的区间。把行当独立样本会把 CI 算窄——
+   这是项目一 deff≈3.3 那个坑的同构版本。
 3. **k 次重复不是样本量。** n 个场景 × k 次重复的有效样本量接近 n，
-   不是 n·k。报告里所有 CI 一律按场景重采样。
+   不是 n·k。报告里所有 CI 一律按簇重采样。
 """
 
 from __future__ import annotations
@@ -128,6 +131,22 @@ def cluster_bootstrap_ci(values_by_cluster: dict[str, list[float]],
     lo = ests[int(alpha / 2 * len(ests))]
     hi = ests[int((1 - alpha / 2) * len(ests)) - 1]
     return (round(lo, 4), round(hi, 4), round(point, 4))
+
+
+def dual_cluster_ci(by_scene: dict[str, list[float]],
+                    by_text: dict[str, list[float]]) -> tuple[float, float, float]:
+    """场景×台词双路聚类，取较宽的区间。
+
+    依赖结构是二维的，单维聚类各自漏一种：
+    - 场景聚类捕获「同场戏共用角色卡」（场景内相关），漏「同台词跨作品复用」；
+    - 台词聚类捕获「同一道题出多次」（跨场景相关），漏场景内相关。
+    没法干净地同时建模（交叉相关），就用两边里更宽的区间——保守、
+    可解释，也免得「换个聚类口径结论就变」这种尴尬。
+    """
+    a = cluster_bootstrap_ci(by_scene)
+    b = cluster_bootstrap_ci(by_text)
+    point = b[2]  # 点估计两种口径相同（都是全体行的均值）
+    return (round(min(a[0], b[0]), 4), round(max(a[1], b[1]), 4), point)
 
 
 def pass_ci(records: list[dict], scaffold: str) -> tuple[float, float, float]:

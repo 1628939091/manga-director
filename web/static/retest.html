@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>复测 · 自我一致性</title>
+<style>
+  :root{
+    --bg:#f5f6f8; --panel:#ffffff; --line:#e3e6ec; --line-soft:#eef0f4;
+    --ink:#141a24; --ink-2:#4b5566; --ink-3:#8a93a5;
+    --brand:#2f5bea; --brand-soft:#eaf0ff;
+    --ok:#12805c; --ok-soft:#e6f6ef;
+    --bad:#c62828; --bad-soft:#fdecec;
+    --radius:10px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%}
+  body{
+    background:var(--bg);color:var(--ink);
+    font:14px/1.6 -apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    -webkit-font-smoothing:antialiased;
+    display:flex;flex-direction:column;min-height:100vh;
+  }
+
+  .top{position:sticky;top:0;z-index:10;height:56px;display:flex;align-items:center;gap:14px;
+    padding:0 18px;background:var(--panel);border-bottom:1px solid var(--line)}
+  .logo{display:flex;align-items:center;gap:9px;font-weight:700}
+  .logo i{width:22px;height:22px;border-radius:6px;background:linear-gradient(135deg,#2f5bea,#7c3aed)}
+  .logo small{font-weight:500;color:var(--ink-3);font-size:12px}
+  .top .spacer{flex:1}
+  .prog{width:190px;height:7px;border-radius:99px;background:#e9ecf2;overflow:hidden}
+  .prog i{display:block;height:100%;width:0;background:linear-gradient(90deg,#2f5bea,#7c3aed);transition:width .18s}
+  .count{font-variant-numeric:tabular-nums;color:var(--ink-2);font-size:15px;font-weight:600;min-width:66px;text-align:right}
+
+  .wrap{flex:1;max-width:880px;width:100%;margin:0 auto;padding:26px 18px 20px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    padding:24px 26px 22px;min-height:330px;display:flex;flex-direction:column}
+
+  .meta{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px}
+  .chip{font-size:12px;padding:3px 10px;border-radius:999px;background:#f2f4f8;
+    border:1px solid var(--line);color:var(--ink-2)}
+  .chip b{color:var(--ink);font-weight:600}
+  .chip.scene{background:var(--brand-soft);border-color:#cfdcff;color:#2f5bea}
+  .chip.scene b{color:#2f5bea}
+
+  .line{font-size:32px;line-height:1.45;font-weight:600;letter-spacing:.5px;margin:6px 0 14px}
+  .sub-label{font-size:12px;color:var(--ink-3);margin-bottom:4px}
+  .subline{font-size:15px;color:var(--ink-2);margin-bottom:6px}
+  .who{font-size:13px;color:var(--ink-3);margin-top:auto;padding-top:18px}
+  .who b{color:var(--ink-2);font-weight:500}
+
+  .banner{display:none;margin:0 0 14px;padding:9px 12px;border-radius:8px;
+    background:var(--bad-soft);border:1px solid #f3c9c9;color:var(--bad);font-size:13px}
+  .banner.on{display:block}
+
+  .done-box{display:none;align-items:center;justify-content:center;flex-direction:column;
+    flex:1;padding:40px 0;text-align:center}
+  .done-box.on{display:flex}
+  .done-box .big{font-size:28px;font-weight:600;margin-bottom:10px}
+  .done-box .hint{color:var(--ink-2);font-size:15px}
+  .done-box .icon{width:44px;height:44px;border-radius:50%;background:var(--ok-soft);
+    color:var(--ok);display:flex;align-items:center;justify-content:center;
+    font-size:22px;font-weight:600;margin-bottom:16px}
+
+  .foot{border-top:1px solid var(--line);background:var(--panel);padding:12px 18px}
+  .foot .inner{max-width:880px;margin:0 auto}
+  .anchor{font-size:13px;color:var(--ink-2);letter-spacing:.2px}
+  .anchor b{color:var(--ink);font-weight:600}
+  .keys{margin-top:6px;font-size:12px;color:var(--ink-3)}
+  .keys kbd{font:inherit;font-size:11px;padding:1px 6px;border:1px solid var(--line);
+    border-bottom-width:2px;border-radius:5px;background:#fafbfd;color:var(--ink-2)}
+  .flash{position:fixed;left:50%;top:14px;transform:translateX(-50%);
+    background:#141a24;color:#fff;font-size:12px;padding:6px 12px;border-radius:99px;
+    opacity:0;transition:opacity .15s;pointer-events:none;z-index:50}
+  .flash.on{opacity:.92}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="logo"><i></i>复测<small>自我一致性 · 不显示上次答案</small></div>
+  <div class="spacer"></div>
+  <div class="prog"><i id="bar"></i></div>
+  <div class="count" id="count">— / —</div>
+</div>
+
+<div class="wrap">
+  <div class="banner" id="net"></div>
+  <div class="card" id="card">
+    <div class="meta" id="meta"></div>
+    <div class="line" id="line">载入中…</div>
+    <div class="sub-label">潜台词</div>
+    <div class="subline" id="subtext"></div>
+    <div class="who" id="who"></div>
+  </div>
+  <div class="done-box" id="done">
+    <div class="icon">✓</div>
+    <div class="big">已完成，回到对话里告诉助手来算 κ</div>
+    <div class="hint" id="done-hint"></div>
+  </div>
+</div>
+
+<div class="foot">
+  <div class="inner">
+    <div class="anchor"><b>1–2</b> 放空｜<b>3–4</b> 平静｜<b>5–6</b> 专注或隐忍｜<b>7–8</b> 紧张急切｜<b>9–10</b> 濒临失控</div>
+    <div class="keys">
+      <kbd>1</kbd>–<kbd>0</kbd> 打分（<kbd>0</kbd> = 10）　<kbd>←</kbd> 上一句　<kbd>空格</kbd> 跳过　<kbd>⏎</kbd> 确认当前句
+    </div>
+  </div>
+</div>
+
+<div class="flash" id="flash"></div>
+
+<script>
+let items = [], total = 0, idx = 0, busy = false;
+
+const $ = id => document.getElementById(id);
+
+function flash(msg){
+  const f = $('flash');
+  f.textContent = msg;
+  f.classList.add('on');
+  clearTimeout(flash._t);
+  flash._t = setTimeout(() => f.classList.remove('on'), 900);
+}
+
+function banner(msg){
+  const b = $('net');
+  if (!msg) { b.classList.remove('on'); b.textContent = ''; return; }
+  b.classList.add('on');
+  b.textContent = msg;
+}
+
+async function api(url, opt){
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), opt && opt.method === 'POST' ? 12000 : 8000);
+  try {
+    const r = await fetch(url, Object.assign({signal: ctl.signal}, opt || {}));
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return await r.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function render(){
+  if (!items.length) return;
+  if (idx >= total) return showDone();
+  const it = items[idx];
+  $('card').style.display = 'flex';
+  $('done').classList.remove('on');
+  $('meta').innerHTML =
+    '<span class="chip scene"><b>' + esc(it.scene) + '</b></span>' +
+    '<span class="chip">' + esc(it.scene_type) + '</span>' +
+    '<span class="chip">关系 · <b>' + esc(it.relation) + '</b></span>';
+  $('line').textContent = it.text;
+  $('subtext').textContent = it.subtext || '（无）';
+  $('who').innerHTML = '<b>' + esc(it.character) + '</b> → <b>' + esc(it.listener) + '</b>';
+  $('count').textContent = (idx + 1) + ' / ' + total;
+  $('bar').style.width = ((idx + 1) / total * 100).toFixed(2) + '%';
+}
+
+function showDone(){
+  $('card').style.display = 'none';
+  $('done').classList.add('on');
+  $('done-hint').textContent = '复测表已写满 ' + total + ' 行，文件：annotations/retest.csv';
+  $('count').textContent = total + ' / ' + total;
+  $('bar').style.width = '100%';
+}
+
+function esc(s){
+  return String(s == null ? '' : s).replace(/[&<>"]/g,
+    c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+}
+
+async function pick(n){
+  if (busy || idx >= total) return;
+  busy = true;
+  const it = items[idx];
+  let saved = false;
+  for (let attempt = 0; attempt < 3 && !saved; attempt++){
+    try {
+      const d = await api('/api/save', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({line_id: it.line_id, arousal: n})
+      });
+      if (!d.ok) throw new Error(d.error || '保存失败');
+      saved = true;
+      banner('');
+      items[idx].done = true;
+    } catch (e) {
+      if (attempt < 2) await new Promise(r => setTimeout(r, 350));
+    }
+  }
+  busy = false;
+  if (!saved){
+    banner('保存失败：这一句还没写进文件。检查服务是否还在跑，再按一次键。');
+    return;
+  }
+  idx++;
+  render();
+}
+
+function next(skip){
+  if (busy) return;
+  if (idx >= total) return;
+  idx++;
+  render();
+  if (skip) flash('已跳过');
+}
+
+async function load(){
+  try {
+    const d = await api('/api/items');
+    items = d.items || [];
+    total = d.total || items.length;
+    const first = items.findIndex(x => !x.done);
+    idx = first < 0 ? total : first;
+    banner('');
+    render();
+  } catch (e) {
+    banner('连不上服务（8772 是否还在跑？）。刷新页面重试。');
+  }
+}
+
+document.addEventListener('keydown', e => {
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const k = e.key;
+  if (k >= '0' && k <= '9'){
+    e.preventDefault();
+    pick(k === '0' ? 10 : Number(k));
+    return;
+  }
+  if (k === 'ArrowLeft'){
+    e.preventDefault();
+    if (idx > 0){ idx--; render(); }
+    else flash('已经是第一句');
+    return;
+  }
+  if (k === ' '){
+    e.preventDefault();
+    next(true);
+    return;
+  }
+  if (k === 'Enter'){
+    e.preventDefault();
+    next(false);
+    return;
+  }
+});
+
+load();
+</script>
+</body>
+</html>
