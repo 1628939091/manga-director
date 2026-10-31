@@ -89,12 +89,22 @@
   .banner{padding:12px 14px;border-radius:10px;font-size:13px;margin-bottom:12px}
   .banner.warn{background:var(--warn-soft);border:1px solid #f0dcb8;color:#7a4a00}
   .banner.ok{background:var(--ok-soft);border:1px solid #c8ebdb;color:#0f6b4d}
+  .net{position:sticky;top:0;z-index:20;padding:10px 14px;font-size:13px;
+       background:#fdecec;border-bottom:1px solid #f3c2c2;color:#8a2020;
+       display:flex;align-items:center;gap:10px}
+  .net button{margin-left:auto;padding:5px 12px;border-radius:99px;border:1px solid #e0a3a3;
+       background:#fff;color:#8a2020;font-size:12px;cursor:pointer;font-family:inherit}
   .toast{position:fixed;left:50%;bottom:74px;transform:translateX(-50%);background:#141a24;color:#fff;
     padding:8px 16px;border-radius:999px;font-size:13px;opacity:0;pointer-events:none;transition:.2s}
   .toast.show{opacity:.94}
 </style>
 </head>
 <body>
+
+<div class="net" id="net" style="display:none">
+  <span>服务已断开：标注台进程不在了。已填内容都在 <code>form.csv</code>，重启服务后点「重连」刷新，不会丢。</span>
+  <button id="retry">重连</button>
+</div>
 
 <div class="top">
   <div class="logo"><i></i>标注台 <small>人标 vs 规则尺</small></div>
@@ -140,14 +150,43 @@ function toast(msg){
   clearTimeout(toast._t); toast._t = setTimeout(() => el.classList.remove('show'), 1400);
 }
 
+// 所有请求走这里：带超时，断线时把横幅打开。
+// 之前服务进程一停，页面就静默卡在 loading——用户看不出是"服务挂了"还是"页面卡了"。
+let offline = false;
+function setOffline(on){
+  if (on === offline) return;
+  offline = on;
+  $('#net').style.display = on ? 'flex' : 'none';
+}
+async function api(url, opt, ms){
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), ms || 8000);
+  try {
+    const r = await fetch(url, Object.assign({signal: ctl.signal}, opt || {}));
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    setOffline(false);
+    return d;
+  } catch (e) {
+    setOffline(true);
+    throw e;
+  } finally {
+    clearTimeout(t);
+  }
+}
+
 async function boot(){
-  const r = await fetch('/api/items');
-  const d = await r.json();
-  state.items = d.items; state.intents = d.intents; state.filled = d.filled;
-  const first = state.items.findIndex(it => !it.arousal && !it.valence && !it.intent);
-  state.i = first < 0 ? 0 : first;
-  loadRow(true);
-  paint();
+  try {
+    const d = await api('/api/items');
+    state.items = d.items; state.intents = d.intents; state.filled = d.filled;
+    const first = state.items.findIndex(it => !it.arousal && !it.valence && !it.intent);
+    state.i = first < 0 ? 0 : first;
+    loadRow(true);
+    paint();
+  } catch (e) {
+    $('#line').textContent = '读不到数据';
+    $('#sub').textContent = '标注台服务没有响应，见顶部提示';
+  }
 }
 
 function loadRow(resetStage){
@@ -223,9 +262,16 @@ async function save(thenNext){
     valence: state.v === null ? '' : state.v,
     intent: state.t || '',
   };
-  const r = await fetch('/api/save', {method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify(body)});
-  const d = await r.json();
+  let d;
+  try {
+    d = await api('/api/save', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(body)}, 15000);
+  } catch (e) {
+    // 值还在内存里：不跳下一句，等重连后按 ⏎ 再存一次，避免"以为存上了"
+    toast('服务断开，这句暂存在页面里——重连后按 ⏎ 重存');
+    paint();
+    return;
+  }
   if (!d.ok){ toast(d.error || '保存失败'); return; }
   state.filled = d.filled;
   it.arousal = body.arousal === '' ? '' : String(body.arousal);
@@ -315,8 +361,13 @@ $('#jump').onchange = e => {
 };
 $('#score').onclick = async () => {
   $('#score').disabled = true; $('#score').textContent = '计算中…';
-  const r = await fetch('/api/score', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'});
-  const d = await r.json();
+  let d;
+  try {
+    d = await api('/api/score', {method:'POST', headers:{'Content-Type':'application/json'},
+      body:'{}'}, 90000);
+  } catch (e) {
+    d = {ok: false, error: '服务断开，无法计算。重连后再点一次。'};
+  }
   const box = $('#report'); box.style.display = 'block';
   if (!d.ok){
     box.innerHTML = `<div class="banner warn">${esc(d.error || '计算失败')}</div>`;
@@ -329,6 +380,8 @@ $('#score').onclick = async () => {
   }
   $('#score').disabled = false; $('#score').textContent = '算出 κ';
 };
+
+$('#retry').onclick = () => boot();
 
 boot();
 </script>
