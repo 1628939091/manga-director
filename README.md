@@ -22,7 +22,7 @@
 | 台词库与场景规模 | ✅ 139 句唯一台词 / 51 场，10 个线索桶覆盖 |
 | 按作品留出（holdout） | ✅ 完成，25% 作品留出，记录带 `split` 字段 |
 | 页面（分镜 + 判卷 + 五臂对比合一） | ✅ 完成（M2），零依赖单页 |
-| 人工标注 + κ 校准工具 | ✅ 工具就绪，**待你本人填 166 行** |
+| 人工标注 + κ 校准工具 | ✅ 工具就绪，**主标 arousal；170 行约 40 分钟** |
 | L3 VLM 辅助判卷 | ⬜ 未开始（M5 可选） |
 
 **Mock 跑出来的数字不是实验结果。** 它只用来验证判卷与指标链路是否自洽
@@ -108,8 +108,8 @@ python web/annotate_server.py       # → http://127.0.0.1:8771
 #   选完自动存盘并跳下一句；⌫ 上一句、空格跳过、⏎ 确认；右下角「算出 κ」随时看结果
 
 # ② 直接用 Excel 填表
-python annotate.py export           # → annotations/form.csv（166 行，不含规则答案）
-#   只填 arousal / valence / intent 三列，别动其他列
+python annotate.py export           # → annotations/form.csv（170 行，不含规则答案）
+#   主标 arousal(1-10) 一列即可；valence / intent 可选，留空不影响计分
 python annotate.py score            # 算 κ，并用人类金标重算模型 MAE
 ```
 
@@ -288,7 +288,9 @@ manga-director/
 
 ## 下一步
 
-1. **填人工标注**（`python web/annotate_server.py`，8771）：170 行，约 1.5 小时。
+1. **填人工标注**（`python web/annotate_server.py`，8771）：主标 arousal，170 行约 40 分钟
+   （valence / intent 可选）。24 条试标的 κ 只有 0.18——规则表这把尺子大概率不能用，
+   但 n=24 太小，要等全量标完才能定论。
    潜台词修复后旧答案作废（26 行里只有 1 行判定依据没变）。
    这是唯一能回答「规则金标配不配当金标准」的路径，也是这份评测从
    「自证」变成「可外部检验」的分界线。
