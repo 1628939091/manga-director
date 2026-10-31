@@ -1,0 +1,760 @@
+[
+ {
+  "scene_id": "real-ch0322a8-S15",
+  "work_id": "real-ch0322a8",
+  "title": "真实剧本场景 15",
+  "characters": {
+   "八戒": {
+    "role": "配角",
+    "voice": "未知",
+    "personality": {
+     "warmth": 0.5,
+     "dominance": 0.5,
+     "energy": 0.5,
+     "neuroticism": 0.5
+    }
+   },
+   "悟空": {
+    "role": "配角",
+    "voice": "未知",
+    "personality": {
+     "warmth": 0.5,
+     "dominance": 0.5,
+     "energy": 0.5,
+     "neuroticism": 0.5
+    }
+   }
+  },
+  "lines": [
+   {
+    "id": "real-ch0322a8-S15-L01",
+    "character": "八戒",
+    "scene": "真实剧本第 15 场",
+    "scene_type": "日常",
+    "listener": "悟空",
+    "relation": "陌生人",
+    "text": "大师兄，这么早就起来了！",
+    "subtext": ""
+   },
+   {
+    "id": "real-ch0322a8-S15-L02",
+    "character": "悟空",
+    "scene": "真实剧本第 15 场",
+    "scene_type": "日常",
+    "listener": "悟空",
+    "relation": "陌生人",
+    "text": "发生了什么事？",
+    "subtext": ""
+   },
+   {
+    "id": "real-ch0322a8-S15-L03",
+    "character": "悟空",
+    "scene": "真实剧本第 15 场",
+    "scene_type": "日常",
+    "listener": "八戒",
+    "relation": "陌生人",
+    "text": "上哪儿去啊师傅？",
+    "subtext": ""
+   }
+  ]
+ },
+ {
+  "scene_id": "real-ch0322a8-S08",
+  "work_id": "real-ch0322a8",
+  "title": "真实剧本场景 8",
+  "characters": {
+   "观音": {
+    "role": "配角",
+    "voice": "未知",
+    "personality": {
+     "warmth": 0.5,
+     "dominance": 0.5,
+     "energy": 0.5,
+     "neuroticism": 0.5
+    }
+   },
+   "悟空": {
+    "role": "配角",
+    "voice": "未知",
+    "personality": {
+     "warmth": 0.5,
+     "dominance": 0.5,
+     "energy": 0.5,
+     "neuroticism": 0.5
+    }
+   },
+   "唐僧": {
+    "role": "配角",
+    "voice": "未知",
+    "personality": {
+     "warmth": 0.5,
+     "dominance": 0.5,
+     "energy": 0.5,
+     "neuroticism": 0.5
+    }
+   }
+  },
+  "lines": [
+   {
+    "id": "real-ch0322a8-S08-L01",
+    "character": "观音",
+    "scene": "真实剧本第 8 场",
+    "scene_type": "日常",
+    "listener": "悟空",
+    "relation": "陌生人",
+    "text": "孙悟空，你这个畜生，你为了跟牛魔王的妹妹成亲，居然把你",
+    "subtext": ""
+   },
+   {
+    "id": "real-ch0322a8-S08-L02",
+    "character": "悟空",
+    "scene": "真实剧本第 8 场",
+    "scene_type": "日常",
+    "listener": "唐僧",
+    "relation": "陌生人",
+    "text": "三八婆！你追了我三天三夜，因为你是女人我才不杀你，不要",
+    "subtext": ""
+   },
+   {
+    "id": "real-ch0322a8-S08-L03",
+    "character": "唐僧",
+    "scene": "真实剧本第 8 场",
+    "scene_type": "日常",
+    "listener": "观音",
+    "relation": "陌生人",
+    "text": "悟空，你怎么可以这样跟观音姐姐讲话呢？",
+    "subtext": ""
+   }
+  ]
+ },
+ {
+  "scene_id": "real-ch0322a8-S03",
+  "work_id": "real-ch0322a8",
+  "title": "真实剧本场景 3",
+  "characters": {
+   "至尊宝": {
+    "role": "配角",
+    "voice": "未知",
+    "personality": {
+     "warmth": 0.5,
+     "dominance": 0.5,
+     "energy": 0.5,
+     "neuroticism": 0.5
+    }
+   },
+   "众人": {
+    "role": "配角",
+    "voice": "未知",
+    "personality": {
+     "warmth": 0.5,
+     "dominance": 0.5,
+     "energy": 0.5,
+     "neuroticism": 0.5
+    }
+   }
+  },
+  "lines": [
+   {
+    "id": "real-ch0322a8-S03-L01",
+    "character": "至尊宝",
+    "scene": "真实剧本第 3 场",
+    "scene_type": "日常",
+    "listener": "众人",
+    "relation": "陌生人",
+    "text": "是谁烧我？",
+    "subtext": ""
+   },
+   {
+    "id": "real-ch0322a8-S03-L02",
+    "character": "众人",
+    "scene": "真实剧本第 3 场",
+    "scene_type": "日常",
+    "listener": "至尊宝",
+    "relation": "陌生人",
+    "text": "(齐声)不是我！是他！(指二当家)",
+    "subtext": ""
+   },
+   {
+    "id": "real-ch0322a8-S03-L03",
+    "character": "至尊宝",
+    "scene": "真实剧本第 3 场",
+    "scene_type": "日常",
+    "listener": "至尊宝",
+    "relation": "陌生人",
+    "text": "我早就猜到是你！(走到二当家面前)我早就看穿了你的心肝",
+    "subtext": ""
+   }
+  ]
+ },
+ {
+  "scene_id": "real-ch0322a8-S06",
+  "work_id": "real-ch0322a8",
+  "title": "真实剧本场景 6",
+  "characters": {
+   "少女": {
+    "role": "配角",
+    "voice": "未知",
+    "personality": {
+     "warmth": 0.5,
+     "dominance": 0.5,
+     "energy": 0.5,
+     "neuroticism": 0.5
+    }
+   },
+   "至尊宝": {
+    "role": "配角",
+    "voice": "未知",
+    "personality": {
+     "warmth": 0.5,
+     "dominance": 0.5,
+     "energy": 0.5,
+     "neuroticism": 0.5
+    }
+   }
+  },
+  "lines": [
+   {
+    "id": "real-ch0322a8-S06-L01",
+    "character": "少女",
+    "scene": "真实剧本第 6 场",
+    "scene_type": "日常",
+    "listener": "至尊宝",
+    "relation": "陌生人",
+    "text": "谢谢！(牵驴向洞口走去)",
+    "subtext": ""
+   },
+   {
+    "id": "real-ch0322a8-S06-L02",
+    "character": "至尊宝",
+    "scene": "真实剧本第 6 场",
+    "scene_type": "日常",
+    "listener": "少女",
+    "relation": "陌生人",
+    "text": "喂！盘丝洞不要乱闯！",
+    "subtext": ""
+   },
+   {
+    "id": "real-ch0322a8-S06-L03",
+    "character": "少女",
+    "scene": "真实剧本第 6 场",
+    "scene_type": "日常",
+    "listener": "少女",
+    "relation": "陌生人",
+    "text": "盘丝洞？你当我不识字，明明是水帘洞嘛！",
+    "subtext": ""
+   }
+  ]
+ },
+ {
+  "scene_id": "real-ch0322a8-S14",
+  "work_id": "real-ch0322a8",
+  "title": "真实剧本场景 14",
+  "characters": {
+   "八戒": {
+    "role": "配角",
+    "voice": "未知",
+    "personality": {
+     "warmth": 0.5,
+     "dominance": 0.5,
+     "energy": 0.5,
+     "neuroticism": 0.5
+    }
+   },
+   "青霞": {
+    "role": "配角",
+    "voice": "未知",
+    "personality": {
+     "warmth": 0.5,
+     "dominance": 0.5,
+     "energy": 0.5,
+     "neuroticism": 0.5
+    }
+   },
+   "唐僧": {
+    "role": "配角",
+    "voice": "未知",
+    "personality": {
+     "warmth": 0.5,
+     "dominance": 0.5,
+     "energy": 0.5,
+     "neuroticism": 0.5
+    }
+   }
+  },
+  "lines": [
+   {
+    "id": "real-ch0322a8-S14-L01",
+    "character": "八戒",
+    "scene": "真实剧本第 14 场",
+    "scene_type": "日常",
+    "listener": "青霞",
+    "relation": "陌生人",
+    "text": "好大的棉花糖啊！",
+    "subtext": ""
+   },
+   {
+    "id": "real-ch0322a8-S14-L02",
+    "character": "青霞",
+    "scene": "真实剧本第 14 场",
+    "scene_type": "日常",
+    "listener": "唐僧",
+    "relation": "陌生人",
+    "text": "难道真的是他？",
+    "subtext": ""
+   },
+   {
+    "id": "real-ch0322a8-S14-L03",
+    "character": "唐僧",
+    "scene": "真实剧本第 14 场",
+    "scene_type": "日常",
+    "listener": "八戒",
+    "relation": "陌生人",
+    "text": "小心啊！打雷喽！下雨收衣服啊！",
+    "subtext": ""
+   }
+  ]
+ },
+ {
+  "scene_id": "real-ch0322a8-S11",
+  "work_id": "real-ch0322a8",
+  "title": "真实剧本场景 11",
+  "characters": {
+   "沙僧": {
+    "role": "配角",
+    "voice": "未知",
+    "personality": {
+     "warmth": 0.5,
+     "dominance": 0.5,
+     "energy": 0.5,
+     "neuroticism": 0.5
+    }
+   },
+   "八戒": {
+    "role": "配角",
+    "voice": "未知",
+    "personality": {
+     "warmth": 0.5,
+     "dominance": 0.5,
+     "energy": 0.5,
+     "neuroticism": 0.5
+    }
+   },
+   "香香": {
+    "role": "配角",
+    "voice": "未知",
+    "personality": {
+     "warmth": 0.5,
+     "dominance": 0.5,
+     "energy": 0.5,
+     "neuroticism": 0.5
+    }
+   }
+  },
+  "lines": [
+   {
+    "id": "real-ch0322a8-S11-L01",
+    "character": "沙僧",
+    "scene": "真实剧本第 11 场",
+    "scene_type": "日常",
+    "listener": "八戒",
+    "relation": "陌生人",
+    "text": "我要杀了你！快给我换回来！",
+    "subtext": ""
+   },
+   {
+    "id": "real-ch0322a8-S11-L02",
+    "character": "八戒",
+    "scene": "真实剧本第 11 场",
+    "scene_type": "日常",
+    "listener": "香香",
+    "relation": "陌生人",
+    "text": "师弟，你也中招啦！(对香香)别吵！告诉你，不为难你，你",
+    "subtext": ""
+   },
+   {
+    "id": "real-ch0322a8-S11-L03",
+    "character": "香香",
+    "scene": "真实剧本第 11 场",
+    "scene_type": "日常",
+    "listener": "沙僧",
+    "relation": "陌生人",
+    "text": "你以为我不想吗？发完一次功要等七天之后才能再发第二次",
+    "subtext": ""
+   }
+  ]
+ },
+ {
+  "scene_id": "real-ch0322a8-S10",
+  "work_id": "real-ch0322a8",
+  "title": "真实剧本场景 10",
+  "characters": {
+   "唐僧": {
+    "role": "配角",
+    "voice": "未知",
+    "personality": {
+     "warmth": 0.5,
+     "dominance": 0.5,
+     "energy": 0.5,
+     "neuroticism": 0.5
+    }
+   },
+   "八戒": {
+    "role": "配角",
+    "voice": "未知",
+    "personality": {
+     "warmth": 0.5,
+     "dominance": 0.5,
+     "energy": 0.5,
+     "neuroticism": 0.5
+    }
+   }
+  },
+  "lines": [
+   {
+    "id": "real-ch0322a8-S10-L01",
+    "character": "唐僧",
+    "scene": "真实剧本第 10 场",
+    "scene_type": "日常",
+    "listener": "八戒",
+    "relation": "陌生人",
+    "text": "我不会走的。",
+    "subtext": ""
+   },
+   {
+    "id": "real-ch0322a8-S10-L02",
+    "character": "八戒",
+    "scene": "真实剧本第 10 场",
+    "scene_type": "日常",
+    "listener": "唐僧",
+    "relation": "陌生人",
+    "text": "啊？为什么？",
+    "subtext": ""
+   },
+   {
+    "id": "real-ch0322a8-S10-L03",
+    "character": "唐僧",
+    "scene": "真实剧本第 10 场",
+    "scene_type": "日常",
+    "listener": "唐僧",
+    "relation": "陌生人",
+    "text": "我们师徒四人这次取西经可以说是困难重重，原因是我们不",
+    "subtext": ""
+   }
+  ]
+ },
+ {
+  "scene_id": "real-ch0322a8-S01",
+  "work_id": "real-ch0322a8",
+  "title": "真实剧本场景 1",
+  "characters": {
+   "悟空": {
+    "role": "配角",
+    "voice": "未知",
+    "personality": {
+     "warmth": 0.5,
+     "dominance": 0.5,
+     "energy": 0.5,
+     "neuroticism": 0.5
+    }
+   },
+   "唐僧": {
+    "role": "配角",
+    "voice": "未知",
+    "personality": {
+     "warmth": 0.5,
+     "dominance": 0.5,
+     "energy": 0.5,
+     "neuroticism": 0.5
+    }
+   }
+  },
+  "lines": [
+   {
+    "id": "real-ch0322a8-S01-L01",
+    "character": "悟空",
+    "scene": "真实剧本第 1 场",
+    "scene_type": "日常",
+    "listener": "唐僧",
+    "relation": "陌生人",
+    "text": "哗！不要吵！",
+    "subtext": ""
+   },
+   {
+    "id": "real-ch0322a8-S01-L02",
+    "character": "唐僧",
+    "scene": "真实剧本第 1 场",
+    "scene_type": "日常",
+    "listener": "悟空",
+    "relation": "陌生人",
+    "text": "你又在吓我！",
+    "subtext": ""
+   },
+   {
+    "id": "real-ch0322a8-S01-L03",
+    "character": "悟空",
+    "scene": "真实剧本第 1 场",
+    "scene_type": "日常",
+    "listener": "悟空",
+    "relation": "陌生人",
+    "text": "既然躲不了那老孙就跟你绝一死战！",
+    "subtext": ""
+   }
+  ]
+ },
+ {
+  "scene_id": "real-ch0322a8-S09",
+  "work_id": "real-ch0322a8",
+  "title": "真实剧本场景 9",
+  "characters": {
+   "牛魔王": {
+    "role": "配角",
+    "voice": "未知",
+    "personality": {
+     "warmth": 0.5,
+     "dominance": 0.5,
+     "energy": 0.5,
+     "neuroticism": 0.5
+    }
+   },
+   "香香": {
+    "role": "配角",
+    "voice": "未知",
+    "personality": {
+     "warmth": 0.5,
+     "dominance": 0.5,
+     "energy": 0.5,
+     "neuroticism": 0.5
+    }
+   },
+   "紫霞": {
+    "role": "配角",
+    "voice": "未知",
+    "personality": {
+     "warmth": 0.5,
+     "dominance": 0.5,
+     "energy": 0.5,
+     "neuroticism": 0.5
+    }
+   }
+  },
+  "lines": [
+   {
+    "id": "real-ch0322a8-S09-L01",
+    "character": "牛魔王",
+    "scene": "真实剧本第 9 场",
+    "scene_type": "日常",
+    "listener": "香香",
+    "relation": "陌生人",
+    "text": "紫霞，来来来，我来介绍我妹妹和妹夫给你认识。香香，",
+    "subtext": ""
+   },
+   {
+    "id": "real-ch0322a8-S09-L02",
+    "character": "香香",
+    "scene": "真实剧本第 9 场",
+    "scene_type": "日常",
+    "listener": "紫霞",
+    "relation": "陌生人",
+    "text": "紫霞姑娘，你好。",
+    "subtext": ""
+   },
+   {
+    "id": "real-ch0322a8-S09-L03",
+    "character": "紫霞",
+    "scene": "真实剧本第 9 场",
+    "scene_type": "日常",
+    "listener": "牛魔王",
+    "relation": "陌生人",
+    "text": "你能留在这里成亲吗？",
+    "subtext": ""
+   }
+  ]
+ },
+ {
+  "scene_id": "real-ch0322a8-S02",
+  "work_id": "real-ch0322a8",
+  "title": "真实剧本场景 2",
+  "characters": {
+   "至尊宝": {
+    "role": "配角",
+    "voice": "未知",
+    "personality": {
+     "warmth": 0.5,
+     "dominance": 0.5,
+     "energy": 0.5,
+     "neuroticism": 0.5
+    }
+   },
+   "二当家": {
+    "role": "配角",
+    "voice": "未知",
+    "personality": {
+     "warmth": 0.5,
+     "dominance": 0.5,
+     "energy": 0.5,
+     "neuroticism": 0.5
+    }
+   },
+   "瞎子": {
+    "role": "配角",
+    "voice": "未知",
+    "personality": {
+     "warmth": 0.5,
+     "dominance": 0.5,
+     "energy": 0.5,
+     "neuroticism": 0.5
+    }
+   }
+  },
+  "lines": [
+   {
+    "id": "real-ch0322a8-S02-L01",
+    "character": "至尊宝",
+    "scene": "真实剧本第 2 场",
+    "scene_type": "日常",
+    "listener": "二当家",
+    "relation": "陌生人",
+    "text": "春三十娘到五岳山来干什么？这个女魔头一向是无宝不到的，难",
+    "subtext": ""
+   },
+   {
+    "id": "real-ch0322a8-S02-L02",
+    "character": "二当家",
+    "scene": "真实剧本第 2 场",
+    "scene_type": "日常",
+    "listener": "瞎子",
+    "relation": "陌生人",
+    "text": "不行啊！金钱落地人头不保啊！",
+    "subtext": ""
+   },
+   {
+    "id": "real-ch0322a8-S02-L03",
+    "character": "瞎子",
+    "scene": "真实剧本第 2 场",
+    "scene_type": "日常",
+    "listener": "至尊宝",
+    "relation": "陌生人",
+    "text": "帮主我不是二当家我是瞎子啊！他才是二当家！(指二当家)",
+    "subtext": ""
+   }
+  ]
+ },
+ {
+  "scene_id": "real-ch0322a8-S07",
+  "work_id": "real-ch0322a8",
+  "title": "真实剧本场景 7",
+  "characters": {
+   "少女": {
+    "role": "配角",
+    "voice": "未知",
+    "personality": {
+     "warmth": 0.5,
+     "dominance": 0.5,
+     "energy": 0.5,
+     "neuroticism": 0.5
+    }
+   },
+   "至尊宝": {
+    "role": "配角",
+    "voice": "未知",
+    "personality": {
+     "warmth": 0.5,
+     "dominance": 0.5,
+     "energy": 0.5,
+     "neuroticism": 0.5
+    }
+   }
+  },
+  "lines": [
+   {
+    "id": "real-ch0322a8-S07-L01",
+    "character": "少女",
+    "scene": "真实剧本第 7 场",
+    "scene_type": "日常",
+    "listener": "至尊宝",
+    "relation": "陌生人",
+    "text": "为什么每次都是你看到姐姐而我看不到呢？",
+    "subtext": ""
+   },
+   {
+    "id": "real-ch0322a8-S07-L02",
+    "character": "至尊宝",
+    "scene": "真实剧本第 7 场",
+    "scene_type": "日常",
+    "listener": "至尊宝",
+    "relation": "陌生人",
+    "text": "这种事有时候要讲缘分的。不过她已经没有以前那么狠了，这次",
+    "subtext": ""
+   },
+   {
+    "id": "real-ch0322a8-S07-L03",
+    "character": "至尊宝",
+    "scene": "真实剧本第 7 场",
+    "scene_type": "日常",
+    "listener": "少女",
+    "relation": "陌生人",
+    "text": "那以后就不会有两个你出现了。",
+    "subtext": ""
+   }
+  ]
+ },
+ {
+  "scene_id": "real-ch0322a8-S12",
+  "work_id": "real-ch0322a8",
+  "title": "真实剧本场景 12",
+  "characters": {
+   "至尊宝": {
+    "role": "配角",
+    "voice": "未知",
+    "personality": {
+     "warmth": 0.5,
+     "dominance": 0.5,
+     "energy": 0.5,
+     "neuroticism": 0.5
+    }
+   },
+   "菩提": {
+    "role": "配角",
+    "voice": "未知",
+    "personality": {
+     "warmth": 0.5,
+     "dominance": 0.5,
+     "energy": 0.5,
+     "neuroticism": 0.5
+    }
+   }
+  },
+  "lines": [
+   {
+    "id": "real-ch0322a8-S12-L01",
+    "character": "至尊宝",
+    "scene": "真实剧本第 12 场",
+    "scene_type": "日常",
+    "listener": "菩提",
+    "relation": "陌生人",
+    "text": "谢谢你！",
+    "subtext": ""
+   },
+   {
+    "id": "real-ch0322a8-S12-L02",
+    "character": "菩提",
+    "scene": "真实剧本第 12 场",
+    "scene_type": "日常",
+    "listener": "至尊宝",
+    "relation": "陌生人",
+    "text": "不用客气！",
+    "subtext": ""
+   },
+   {
+    "id": "real-ch0322a8-S12-L03",
+    "character": "至尊宝",
+    "scene": "真实剧本第 12 场",
+    "scene_type": "日常",
+    "listener": "至尊宝",
+    "relation": "陌生人",
+    "text": "为什么带我回这个洞呢？",
+    "subtext": ""
+   }
+  ]
+ }
+]

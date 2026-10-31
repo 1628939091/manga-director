@@ -17,3 +17,4 @@ outputs/*.log
 annotations/form.csv
 annotations/key.jsonl
 outputs/*mock*.md
+data/stage/
