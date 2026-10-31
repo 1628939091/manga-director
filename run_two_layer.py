@@ -42,7 +42,8 @@ def main(argv: list[str]) -> int:
 
     if mode == "report":                       # 只重出报告，零 API 调用
         # 用法：python run_two_layer.py report [k] [后缀，如 _mock]
-        return render_only(k, argv[3] if len(argv) > 3 else "")
+        return render_only(k, argv[3] if len(argv) > 3 else "",
+                           argv[4] if len(argv) > 4 else "-")
 
     n_gen = int(os.environ.get("MDH_N_SCENES", "50"))
     all_tasks = tasks.build_tasks(n_generated=n_gen)
@@ -82,11 +83,15 @@ def main(argv: list[str]) -> int:
 
     os.makedirs(OUT_DIR, exist_ok=True)
     # Mock 与真实运行分文件存放：mock 只用来验证链路，绝不能覆盖已跑完的真实记录与报告
-    suffix = "" if mode == "api" else "_mock"
+    suffix = ("" if mode == "api" else "_mock") + (
+        ("_" + os.environ["MDH_TAG"]) if os.environ.get("MDH_TAG") else "")
     rec_path = os.path.join(OUT_DIR, f"records_two_layer{suffix}.jsonl")
     runner.save_records(records, rec_path)
 
-    base_path = os.path.join(OUT_DIR, "records.jsonl")
+    # 基线记录可指定：两层跑在 51 场上，就不能拿 13 场的单层记录来比
+    base_path = os.environ.get("MDH_BASELINE", os.path.join(OUT_DIR, "records.jsonl"))
+    if not os.path.isabs(base_path):
+        base_path = os.path.join(ROOT, base_path)
     baseline = analysis.load(base_path) if os.path.exists(base_path) else None
 
     md = analysis.render_two_layer(records, {
@@ -113,7 +118,7 @@ def _r(pair) -> str:
     return f"{h / n * 100:.0f}%" if n else "—"
 
 
-def render_only(k: int = 3, suffix: str = "") -> int:
+def render_only(k: int = 3, suffix: str = "", model: str = "-") -> int:
     """只重渲染报告，不调模型。
 
     为什么需要：报告生成逻辑（归因表、分层结论、留出检验）会随分析口径改进，
@@ -125,11 +130,14 @@ def render_only(k: int = 3, suffix: str = "") -> int:
         print(f"[错误] 找不到 {rec_path}，先跑 python run_two_layer.py api 3")
         return 2
     records = analysis.load(rec_path)
-    base_path = os.path.join(OUT_DIR, "records.jsonl")
+    # 基线记录可指定：两层跑在 51 场上，就不能拿 13 场的单层记录来比
+    base_path = os.environ.get("MDH_BASELINE", os.path.join(OUT_DIR, "records.jsonl"))
+    if not os.path.isabs(base_path):
+        base_path = os.path.join(ROOT, base_path)
     baseline = analysis.load(base_path) if os.path.exists(base_path) else None
     scs = analysis.scaffolds_of(records)
     md = analysis.render_two_layer(records, {
-        "scaffolds": scs, "k": k, "tau": judge.DEFAULT_TAU, "model": "-",
+        "scaffolds": scs, "k": k, "tau": judge.DEFAULT_TAU, "model": model,
     }, baseline=baseline)
     out = os.path.join(OUT_DIR, f"analysis_two_layer{suffix}.md")
     analysis.save(md, out)

@@ -23,7 +23,12 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from mdh import judge, llm, report, runner, tasks  # noqa: E402
 
 OUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "outputs")
-SCAFFOLDS = ("naive_shot", "card_injected", "card_fewshot", "card_repair", "card_formula")
+_ALL_ARMS = ("naive_shot", "card_injected", "card_fewshot", "card_repair", "card_formula")
+# 只想跑部分臂时用 MDH_ARMS="card_injected,card_formula"——扩规模重跑基线时，
+# 五个臂全跑一遍是 700+ 次调用，没必要为了对比表付这个钱
+SCAFFOLDS = tuple(
+    a.strip() for a in os.environ.get("MDH_ARMS", "").split(",") if a.strip()
+) or _ALL_ARMS
 
 BANNER = """
 ==============================================================
@@ -84,7 +89,10 @@ def main(argv: list[str]) -> int:
 
     os.makedirs(OUT_DIR, exist_ok=True)
     # Mock 与真实运行分文件存放：mock 只用来验证链路，绝不能覆盖已跑完的真实记录与报告
-    suffix = "" if mode == "api" else "_mock"
+    # MDH_TAG 用来给「不同规模/不同臂子集」的运行分文件：
+    # 51 场的单层基线不能覆盖 13 场那份（后者是已交付报告的原始记录）
+    suffix = ("" if mode == "api" else "_mock") + (
+        ("_" + os.environ["MDH_TAG"]) if os.environ.get("MDH_TAG") else "")
     records_path = os.path.join(OUT_DIR, f"records{suffix}.jsonl")
     runner.save_records(records, records_path)
 

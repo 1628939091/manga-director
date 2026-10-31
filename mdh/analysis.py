@@ -631,6 +631,16 @@ def render_two_layer(records: list[dict], meta: dict, baseline: list[dict] | Non
     L.append(f"> 「原始 pass@1」是 τ={tau}、每场每行都过那个口径——"
              "在第 2 节它变成了一列参考，而不是主指标。")
     L.append("")
+    # 口径对齐说明：这两批记录的 k 可能不同（基线为省成本跑 k=1）。
+    # 表里比的是「逐次运行的平均指标」，不涉及 pass^k，所以 k 不同不影响这一列；
+    # 但 pass^k 这类依赖重复次数的指标绝不能跨 k 比较，必须在报告里写清。
+    _kb = {r.get("repeat") for r in (baseline or [])}
+    _kr = {r.get("repeat") for r in records}
+    if baseline and (_kb and _kr) and max(_kb) != max(_kr):
+        L.append(f"> ⚠️ **口径提醒**：单层基线 k={max(_kb) + 1}，两层 k={max(_kr) + 1}。"
+                 "本表比的是逐次运行的平均指标（与 k 无关），**不要**拿两边的 pass^k 直接比。"
+                 "两批记录跑的是同一批场景、同一个判卷器，场景级数字可比。")
+        L.append("")
 
     # ---------------- 3 ----------------
     L.append("## 3. 残差归因：判对 vs 判错")
