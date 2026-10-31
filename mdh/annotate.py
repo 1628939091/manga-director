@@ -43,9 +43,24 @@ from collections import Counter, defaultdict
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ANN_DIR = os.path.join(ROOT, "annotations")
 FORM = os.path.join(ANN_DIR, "form.csv")
+RETEST = os.path.join(ANN_DIR, "retest.csv")
 KEY = os.path.join(ANN_DIR, "key.jsonl")
 OUT_MD = os.path.join(ANN_DIR, "human_gold_report.md")
-RECORDS = os.path.join(ROOT, "outputs", "records_two_layer.jsonl")
+def _pick_records() -> str:
+    """默认读最新的两层记录。
+
+    写死文件名踩过坑：2026-10-31 的报告读到了修复前的旧记录，
+    把「模型 vs 人 intent 8.3%」当成结论报了出去，实际修复后是 51%。
+    """
+    cands = [os.path.join(ROOT, "outputs", n) for n in (
+        "records_two_layer_subfix.jsonl",
+        "records_two_layer.jsonl",
+    )]
+    exist = [p for p in cands if os.path.exists(p)]
+    return max(exist, key=os.path.getmtime) if exist else cands[-1]
+
+
+RECORDS = _pick_records()
 
 # 前 11 个与 reference.CUE_TABLE / agents.INTENT_GLOSS 同集（κ 和意图准确率都算在这 11 类上）。
 # 「其他」只出现在人工标注侧：规则表永远不会输出它，所以人选「其他」= 该句记为不一致。
@@ -325,6 +340,50 @@ def _read_form() -> dict[str, dict]:
     return out
 
 
+def _self_consistency() -> dict | None:
+    """自我一致：同一批行盲标两次，算「自己 vs 自己」的 κ。
+
+    它回答的是「标注者稳不稳」，不是「标得对不对」。
+    这两件事必须分开：稳定的标注者也可能有系统性偏好，
+    但不稳定的标注者一定不能当尺子。
+    """
+    if not os.path.exists(RETEST):
+        return None
+    first: dict[str, float] = {}
+    with open(FORM, encoding="utf-8-sig", newline="") as f:
+        for r in csv.DictReader(f):
+            v = (r.get("arousal(1-10)") or "").strip()
+            try:
+                if v:
+                    first[r["line_id"]] = float(v)
+            except ValueError:
+                pass
+    a: list[int] = []
+    b: list[int] = []
+    with open(RETEST, encoding="utf-8-sig", newline="") as f:
+        for r in csv.DictReader(f):
+            v = (r.get("arousal(1-10)") or "").strip()
+            lid = r.get("line_id")
+            if not v or lid not in first:
+                continue
+            try:
+                y = float(v)
+            except ValueError:
+                continue
+            a.append(int(round(first[lid])))
+            b.append(int(round(y)))
+    n = len(a)
+    if n < 8:
+        return None
+    return {
+        "n": n,
+        "kappa": weighted_kappa(a, b),
+        "exact": sum(1 for x, y in zip(a, b) if x == y) / n,
+        "within": sum(1 for x, y in zip(a, b) if abs(x - y) <= 1) / n,
+        "mae": sum(abs(x - y) for x, y in zip(a, b)) / n,
+    }
+
+
 def _fmt(x: float | None, digits: int = 3) -> str:
     return "—" if x is None else f"{x:.{digits}f}"
 
@@ -477,10 +536,42 @@ def cmd_score(records_path: str = RECORDS) -> int:
                      f"{_fmt(None if not ri else sum(ri) / len(ri) * 100, 1)}% | "
                      f"{_fmt(None if not hi else sum(hi) / len(hi) * 100, 1)}% |")
         L.append("")
-        L.append("> 若「人标 MAE」明显高于「规则金标 MAE」，说明模型学到的是规则表的"
-                 "**字面偏好**而不是人的判断——这类模型上线会被真人导演判错。")
+        L.append("> **读法**：`judge_cue` 拿到了线索表，所以它离规则近（0.46）、离人远（1.27）——"
+                 "这是构造使然，不能当能力上限。`judge_plain` 没拿到表，它离人（1.61）反而比离规则"
+                 "（1.74）更近，说明模型在某些行上确实读出了语义。但两臂的**意图**分类都是离规则更近"
+                 "（82% / 71% vs 51%），说明「这句话在干什么」仍被表层词汇主导。")
     L.append("")
-    L.append("## 4. 这张表不能说明什么")
+    L.append("## 4. 标注者可靠性（自我一致，test-retest）")
+    L.append("")
+    sc = _self_consistency()
+    if sc is None:
+        L.append("> 未找到 `annotations/retest.csv`（或填不满 8 行），本节跳过。")
+        L.append("> 生成复测表的方法见 `annotations/retest.csv` 的列定义：抽 20 行打乱、盲标 arousal、再与本表比对。")
+    else:
+        L.append(f"同一批人、同一批行、隔一段时间盲标两次，样本 **{sc['n']}** 行：")
+        L.append("")
+        L.append("| 指标 | 值 |")
+        L.append("|---|---|")
+        L.append(f"| 二次加权 κ（自己 vs 自己） | **{_fmt(sc['kappa'])}** |")
+        L.append(f"| 完全一致率 | {sc['exact'] * 100:.0f}% |")
+        L.append(f"| ±1 档内 | {sc['within'] * 100:.0f}% |")
+        L.append(f"| 平均绝对差 | {_fmt(sc['mae'], 2)} 档 |")
+        L.append("")
+        if sc["kappa"] is not None and sc["kappa"] >= 0.8:
+            L.append("> **标注者稳定。** 因此「人 vs 规则」的分歧不能归因于标注噪声："
+                     "标注者可靠性接近上限，衰减修正后规则表的一致性几乎不变。")
+            L.append(">")
+            L.append("> 仍无法排除标注者的**系统性偏好**（例如对反讽特别敏感）——"
+                     "那种偏差每次都会一致地出现，自我一致 κ 反而会偏高。"
+                     "要检验它，需要第二名标注者。")
+        elif sc["kappa"] is not None and sc["kappa"] >= 0.5:
+            L.append("> **基本稳定，但部分行确实模糊。** 人 vs 规则的分歧中，"
+                     "有一部分是任务本身的信息不足，不能全归给规则表。")
+        else:
+            L.append("> **标注者自身不稳。** 此时人标不能当唯一真值，"
+                     "应改报「人-人一致率」而不是「与某个金标的距离」。")
+    L.append("")
+    L.append("## 5. 这张表不能说明什么")
     L.append("")
     L.append(f"- 单标注者，没有第二人，所以这里是「人 vs 规则」的一致性，"
              f"不是「人 vs 人」的信度。要报 inter-annotator κ，至少再找一人标同样的 {n} 行。")
