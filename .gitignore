@@ -16,4 +16,4 @@ outputs/*.log
 # 标注表与答案键由 annotate.py export 生成，不入库
 annotations/form.csv
 annotations/key.jsonl
-outputs/*_mock.md
+outputs/*mock*.md
