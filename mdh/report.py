@@ -112,13 +112,20 @@ def render(records: list[dict], meta: dict) -> str:
         L.append(f"| `{s}` | " + " | ".join(f"{ts[t]['pass@1'] * 100:.0f}%" for t in taus) + " |")
     L.append("")
 
-    L.append("### 3.2 容差缩放")
+    L.append("### 3.2 容差缩放（仅数值字段，剔除 style/gaze）")
+    L.append("")
+    L.append("> 为什么剔除：style/gaze 是枚举判等，命中率不随容差缩放（恒在随机水平"
+             " ~27%）。把它们混进「每行 ≥τ」的连乘里，无论容差放大多少倍 pass 都"
+             "饱和为 0——那样这张表看起来像「结论不受容差影响」，实际是「指标饱和」，"
+             "没有信息量。所以缩放实验只在 6 个数值字段上做；style/gaze 的问题"
+             "是「枚举对不上」，不是「容差定错了」，归第 2 节逐字段误差讨论。")
     L.append("")
     scales = (0.5, 0.75, 1.0, 1.5, 2.0)
     L.append("| scaffold | " + " | ".join(f"×{s}" for s in scales) + " |")
     L.append("|---" * (len(scales) + 1) + "|")
     for s in scaffolds:
-        row = [metrics.tol_scale_sensitivity(records, s, sc)["pass@1"] for sc in scales]
+        row = [metrics.tol_scale_sensitivity(records, s, sc, numeric_only=True)["pass@1"]
+               for sc in scales]
         L.append(f"| `{s}` | " + " | ".join(f"{v * 100:.0f}%" for v in row) + " |")
     L.append("")
 
@@ -201,11 +208,11 @@ def _diagnose(records: list[dict], scaffolds: list[str], k: int, tau: float) -> 
     s, p1, pk, gap = max(usable, key=lambda x: x[3])
     if gap > 0.10:
         if p1 >= 0.7:
-            out.append(f"1. **可靠性缺口（`{s}`）**：pass@1 = {_pct(p1)} 看起来可以在灰度里用，"
+            out.append(f"**可靠性缺口（`{s}`）**：pass@1 = {_pct(p1)} 看起来可以在灰度里用，"
                        f"但 pass^{k} = {_pct(pk)}，缺口 {gap * 100:.0f} 个百分点。"
                        f"一次过和每次过是两个产品；上线门槛应该按 pass^k 定，不是 pass@1。")
         else:
-            out.append(f"1. **可靠性缺口（`{s}`）**：pass@1 = {_pct(p1)}，"
+            out.append(f"**可靠性缺口（`{s}`）**：pass@1 = {_pct(p1)}，"
                        f"pass^{k} = {_pct(pk)}。单次就已经不稳，重复 k 次只会把不稳放大。")
 
     # 2) 场景连乘
@@ -214,7 +221,7 @@ def _diagnose(records: list[dict], scaffolds: list[str], k: int, tau: float) -> 
     lp = metrics.line_level_pass(records, worst, tau)
     p1w = metrics.pass_at_1(records, worst)
     if lp - p1w > 0.10:
-        out.append(f"2. **场景级连乘（`{worst}`）**：行级 pass {_pct(lp)}，"
+        out.append(f"**场景级连乘（`{worst}`）**：行级 pass {_pct(lp)}，"
                    f"场级 pass 只有 {_pct(p1w)}（差 {(lp - p1w) * 100:.0f} 个百分点）。"
                    f"参照算一下：行级 95%、一场 4 行 → 场级约 {(0.95 ** 4) * 100:.0f}%。"
                    f"这就是必须按场报可靠性的理由。")
@@ -224,7 +231,7 @@ def _diagnose(records: list[dict], scaffolds: list[str], k: int, tau: float) -> 
     if v:
         worst_v = max(v, key=v.get)
         if v[worst_v] > 0.05:
-            out.append(f"3. **禁令违反（`{worst_v}`：{_pct(v[worst_v])} 的行）**："
+            out.append(f"**禁令违反（`{worst_v}`：{_pct(v[worst_v])} 的行）**："
                        f"说明「不要喊」这类约束写在自然语言里是无效的，"
                        f"必须升级为结构化字段 + 硬阈值才可执行、可计数。")
 
@@ -233,7 +240,7 @@ def _diagnose(records: list[dict], scaffolds: list[str], k: int, tau: float) -> 
         a = metrics.pass_at_1(records, "card_injected")
         b = metrics.pass_at_1(records, "card_formula")
         if b - a > 0.15:
-            out.append(f"4. **给出公式才对齐（{_pct(a)} → {_pct(b)}）**：同一份角色卡下，"
+            out.append(f"**给出公式才对齐（{_pct(a)} → {_pct(b)}）**：同一份角色卡下，"
                        f"把参考算法原样交出，通过率跳升 {(b - a) * 100:.0f} 个百分点。"
                        f"说明模型的短板不在「写参数」，而在「从台词读出内心情绪」——"
                        f"方法论含义是：这层能力该用检索/规则补，而不是指望 prompt。")
@@ -244,7 +251,7 @@ def _diagnose(records: list[dict], scaffolds: list[str], k: int, tau: float) -> 
         b = metrics.pass_at_1(records, "card_repair")
         ta, tb = metrics.mean_tokens(records, "card_injected"), metrics.mean_tokens(records, "card_repair")
         if b > a and ta > 0:
-            out.append(f"5. **修复轮的性价比**：通过率 {_pct(a)} → {_pct(b)}，"
+            out.append(f"**修复轮的性价比**：通过率 {_pct(a)} → {_pct(b)}，"
                        f"代价是 tokens/场 {ta:.0f} → {tb:.0f}"
                        f"（+{(tb / ta - 1) * 100:.0f}%）。"
                        f"修复反馈只回传 L1 规则错误，不回传金标准数值——否则就是对着答案改错。")
@@ -256,8 +263,10 @@ def _diagnose(records: list[dict], scaffolds: list[str], k: int, tau: float) -> 
         vals = [v["pass@1"] for v in ts.values()]
         spans.append((s, max(vals) - min(vals)))
     s_max, span = max(spans, key=lambda x: x[1])
-    out.append(f"6. **阈值敏感性**：τ 从 0.5 扫到 1.0，`{s_max}` 的 pass@1 "
+    out.append(f"**阈值敏感性**：τ 从 0.5 扫到 1.0，`{s_max}` 的 pass@1 "
                f"跨度 {span * 100:.0f} 个百分点。报告结论时必须给这条误差带，"
                f"否则「我做到 85%」这种说法在换一个 τ 之后就会被打穿。")
 
-    return out
+    # 编号在返回时才分配：哪些诊断被触发是数据决定的，
+    # 写死在字符串里就会跳号（只有 2 和 6 那种报告就是这么来的）
+    return [f"{i}. {msg}" for i, msg in enumerate(out, 1)]

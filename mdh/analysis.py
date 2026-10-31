@@ -610,6 +610,60 @@ def render_two_layer(records: list[dict], meta: dict, baseline: list[dict] | Non
     # ---------------- 2 ----------------
     L.append("## 2. 端到端对比（同一判卷、同一金标准）")
     L.append("")
+
+    # 2×2 因子分解：拆层（单/两层）× 给不给线索表。
+    # 四行并排会把两个因子混在一起，读者无法回答「提升是不是靠喂线索表」；
+    # 摆成 2×2 后主效应与交互直接可读，这个质疑被数字本身堵死。
+    def _med_of(src, s):
+        vals = [r["hit_rate"] for r in src if r["scaffold"] == s]
+        return quantiles(vals)[2] if vals else None
+
+    cells, src_of = {}, {}
+    if baseline:
+        for s in ("card_injected", "card_formula"):
+            if any(r["scaffold"] == s for r in baseline):
+                cells[s] = _med_of(baseline, s)
+                src_of[s] = baseline
+    for s in ("judge_plain", "judge_cue"):
+        if s in scs:
+            cells[s] = _med_of(records, s)
+            src_of[s] = records
+
+    if len(cells) == 4:
+        sn, sy = cells["card_injected"], cells["card_formula"]
+        tn, ty = cells["judge_plain"], cells["judge_cue"]
+        layer_eff = (tn - sn, ty - sy)          # 拆层效应：固定给表水平
+        cue_eff = (sy - sn, ty - tn)            # 给表效应：固定架构水平
+        inter = cue_eff[1] - cue_eff[0]         # 交互：给表效应在两层里变了多少
+        L.append("### 因子分解：拆层 × 给不给线索表（场景平均命中率中位数）")
+        L.append("")
+        L.append("| | 不给线索表 | 给线索表 |")
+        L.append("|---|---|---|")
+        L.append(f"| 单层（模型直接出 8 参数） | {sn:.2f} | {sy:.2f} |")
+        L.append(f"| 两层（模型判读 + 代码标定） | {tn:.2f} | {ty:.2f} |")
+        L.append("")
+        L.append(f"- **拆层效应**：{layer_eff[0]:+.2f}（不给表）/ {layer_eff[1]:+.2f}（给表）")
+        L.append(f"- **给表效应**：{cue_eff[0]:+.2f}（单层）/ {cue_eff[1]:+.2f}（两层）")
+        L.append(f"- **交互**：{inter:+.2f}"
+                 f"（|{abs(inter):.2f}| 越接近 0，两个因子越近似可加）")
+        L.append("")
+        # 结论算出来，不写死（与第 0 节同一纪律）
+        if min(layer_eff) > 0 and min(map(abs, layer_eff)) > max(map(abs, cue_eff)):
+            L.append("> **主效应是「拆层」，不是「给答案」。**"
+                     f"拆层效应（{min(map(abs, layer_eff)):.2f}~{max(map(abs, layer_eff)):.2f}）"
+                     f"大于给表效应（{min(map(abs, cue_eff)):.2f}~{max(map(abs, cue_eff)):.2f}），"
+                     "且在两个水平上方向一致、交互接近 0。"
+                     "「提升是不是靠喂线索表」这个质疑不成立。")
+        elif min(layer_eff) > 0:
+            L.append("> **拆层有正向效应，但给表效应与之相当。**"
+                     "不能声称「提升主要来自拆层」，只能说两者叠加；"
+                     "要点名给表贡献了多大比例。")
+        else:
+            L.append("> **拆层效应方向不一致或为负。**"
+                     "不能声称「拆层有用」，需要回到判读层与标定层分别排查。")
+        L.append("")
+    L.append("### 明细（四行同口径）")
+    L.append("")
     rows = []
     if baseline:
         for s in ("card_injected", "card_formula"):
@@ -629,7 +683,7 @@ def render_two_layer(records: list[dict], meta: dict, baseline: list[dict] | Non
                  f"{_pct(sum(1 for r in src if r['scaffold'] == s and r['passed']) / max(1, len([r for r in src if r['scaffold'] == s])))} |")
     L.append("")
     L.append(f"> 「原始 pass@1」是 τ={tau}、每场每行都过那个口径——"
-             "在第 2 节它变成了一列参考，而不是主指标。")
+             "它是结构性门槛（见第 0 节），在这里只作参考列。")
     L.append("")
     # 口径对齐说明：这两批记录的 k 可能不同（基线为省成本跑 k=1）。
     # 表里比的是「逐次运行的平均指标」，不涉及 pass^k，所以 k 不同不影响这一列；

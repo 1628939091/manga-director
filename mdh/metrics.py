@@ -159,8 +159,14 @@ def tau_sensitivity(records: list[dict], scaffold: str, taus=(0.5, 0.6, 0.7, 0.8
 
 
 def tol_scale_sensitivity(records: list[dict], scaffold: str, scale: float,
-                          tau: float = 0.8) -> dict:
-    """把所有数值容差乘以 scale，重算 pass。检验"结论是不是我调容差调出来的"。"""
+                          tau: float = 0.8, numeric_only: bool = False) -> dict:
+    """把数值容差乘以 scale，重算 pass。检验"结论是不是我调容差调出来的"。
+
+    numeric_only=True 时只判 6 个数值字段：style/gaze 是枚举判等，
+    命中率不随容差缩放（恒在随机水平 ~27%）。把它们混进「每行 ≥τ」的
+    连乘里，无论 scale 多大 pass 都饱和为 0——表看起来像「结论不受
+    容差影响」，实际是「指标饱和」，没有信息量。所以缩放实验必须在
+    剔除枚举字段后做，枚举字段的结论另说。"""
     n_pass = n_tot = 0
     for r in records:
         if r["scaffold"] != scaffold:
@@ -174,7 +180,8 @@ def tol_scale_sensitivity(records: list[dict], scaffold: str, scale: float,
                     ok = False
                     break
                 hits = [d <= TOL_BASE[k] * scale for k, d in row["deltas"].items()]
-                hits += [bool(row["hits"].get("style")), bool(row["hits"].get("gaze"))]
+                if not numeric_only:
+                    hits += [bool(row["hits"].get("style")), bool(row["hits"].get("gaze"))]
                 if sum(hits) / len(hits) < tau:
                     ok = False
                     break
