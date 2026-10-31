@@ -237,7 +237,7 @@ class MockDirector:
         repeat = int(meta.get("repeat", 0))
         prompt = str(messages)
 
-        if scaffold in ("judge_plain", "judge_cue"):
+        if scaffold in ("judge_plain", "judge_cue", "judge_nudge"):
             text = self._appraisal(scene, scaffold, repeat, attempt)
             return LLMResult(
                 text=text,
@@ -287,7 +287,9 @@ class MockDirector:
         缺陷率按臂给：给了线索表的臂（judge_cue）读得更准一点，
         但仍然会偏——这是真实模型的形态，不是"给了表就满分"。
         """
-        plain = scaffold == "judge_plain"
+        # judge_nudge 只是提示词不同，Mock 没有能力模拟「提示词变好」，
+        # 就按 plain 的缺陷率给——它只用来验证链路，不产生结论
+        plain = scaffold in ("judge_plain", "judge_nudge")
         p_shift = 0.55 if plain else 0.22
         p_intent = 0.35 if plain else 0.15
         p_ev = 0.05 if plain else 0.03

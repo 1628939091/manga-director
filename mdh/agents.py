@@ -30,10 +30,10 @@ from . import reference as ref
 from . import schema
 
 SCAFFOLDS = ("naive_shot", "card_injected", "card_fewshot", "card_repair",
-             "card_formula", "judge_plain", "judge_cue")
+             "card_formula", "judge_plain", "judge_cue", "judge_nudge")
 
 # 两层架构的两个臂：模型只判读，标定由 pipeline 完成
-JUDGE_SCAFFOLDS = ("judge_plain", "judge_cue")
+JUDGE_SCAFFOLDS = ("judge_plain", "judge_cue", "judge_nudge")
 
 
 # --------------------------------------------------------------------------
@@ -196,6 +196,23 @@ CUE_TABLE_DOC = """参考：台词线索 → 内心唤醒（可借鉴，但不�
 潜台词里出现 心跳/其实/忍住/怕/紧张 时，arousal 再 +1.2（上限 10）。"""
 
 
+# judge_nudge = judge_plain + 一段「括号里那句话该怎么用」的说明。
+# 起因：实测中性行和紧张行的 gold 差 1.21，模型只走出 0.37——信号被丢掉了。
+# 要么是模型不会读，要么是没人告诉它要读；这个臂就是把后者单独拎出来测。
+NUDGE_DOC = """关于括号里的那句话，它有两种，必须分开对待：
+
+1. **内心状态**（多半以「其实…」「心里…」开头，例如「其实没想真让他走」）
+   ＝ 这个角色没说出口的真实状态，**才是 arousal 的依据**。
+   当它与台词字面相反时，按它给分，不按字面：嘴上赶人、心里不舍 → arousal 要高。
+2. **动作/表情提示**（例如「指了指门口」「低着头」「皱起眉」）
+   ＝ 台词的表现方式，不直接等于内心强度。
+   凶的动作不代表内心激烈，平静的动作也不代表内心平静；
+   这种情况下要靠台词内容、场景、人物关系自己判断。
+
+一句话：**台词是他说出来的，括号里是他没说的；判读以内心的那个为准，
+但不要把动作姿态误当成情绪强度。**"""
+
+
 def build_appraisal_prompt(task: dict, scaffold: str) -> list[dict]:
     lines = task["lines"]
     parts: list[str] = [f"场次：{task['title']}（scene_id={task['scene_id']}）", "", "角色卡："]
@@ -219,6 +236,9 @@ def build_appraisal_prompt(task: dict, scaffold: str) -> list[dict]:
     if scaffold == "judge_cue":
         parts.append("")
         parts.append(CUE_TABLE_DOC)
+    elif scaffold == "judge_nudge":
+        parts.append("")
+        parts.append(NUDGE_DOC)
     parts.append("")
     parts.append(APPRAISAL_DOC)
     parts.append("")

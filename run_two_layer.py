@@ -28,11 +28,16 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from mdh import analysis, judge, llm, runner, tasks  # noqa: E402
+from mdh import agents, analysis, judge, llm, runner, tasks  # noqa: E402
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 OUT_DIR = os.path.join(ROOT, "outputs")
-ARMS = ("judge_plain", "judge_cue")
+# MDH_ARMS 用来只跑其中几个臂（比如单独加一个臂做对照，不重跑已有的）
+_arms_env = os.environ.get("MDH_ARMS", "")
+ARMS = tuple(a.strip() for a in _arms_env.split(",") if a.strip()) or ("judge_plain", "judge_cue")
+for _a in ARMS:
+    if _a not in agents.JUDGE_SCAFFOLDS:
+        raise SystemExit(f"未知判读臂：{_a}（可选：{agents.JUDGE_SCAFFOLDS}）")
 
 
 def main(argv: list[str]) -> int:
