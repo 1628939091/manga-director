@@ -40,6 +40,10 @@ def main(argv: list[str]) -> int:
     k = int(argv[2]) if len(argv) > 2 else 3
     model = argv[3] if len(argv) > 3 else "deepseek-ai/DeepSeek-V3.2"
 
+    if mode == "report":                       # 只重出报告，零 API 调用
+        # 用法：python run_two_layer.py report [k] [后缀，如 _mock]
+        return render_only(k, argv[3] if len(argv) > 3 else "")
+
     n_gen = int(os.environ.get("MDH_N_SCENES", "50"))
     all_tasks = tasks.build_tasks(n_generated=n_gen)
     # 按作品切分：同一部作品的角色卡与说话风格相同，按场景随机切会泄漏
@@ -107,6 +111,31 @@ def main(argv: list[str]) -> int:
 def _r(pair) -> str:
     h, n = pair
     return f"{h / n * 100:.0f}%" if n else "—"
+
+
+def render_only(k: int = 3, suffix: str = "") -> int:
+    """只重渲染报告，不调模型。
+
+    为什么需要：报告生成逻辑（归因表、分层结论、留出检验）会随分析口径改进，
+    而模型调用是花钱花时间的。改分析不改数据时，必须能零成本重出报告，
+    否则每次调措辞都要重跑 300 次调用。
+    """
+    rec_path = os.path.join(OUT_DIR, f"records_two_layer{suffix}.jsonl")
+    if not os.path.exists(rec_path):
+        print(f"[错误] 找不到 {rec_path}，先跑 python run_two_layer.py api 3")
+        return 2
+    records = analysis.load(rec_path)
+    base_path = os.path.join(OUT_DIR, "records.jsonl")
+    baseline = analysis.load(base_path) if os.path.exists(base_path) else None
+    scs = analysis.scaffolds_of(records)
+    md = analysis.render_two_layer(records, {
+        "scaffolds": scs, "k": k, "tau": judge.DEFAULT_TAU, "model": "-",
+    }, baseline=baseline)
+    out = os.path.join(OUT_DIR, f"analysis_two_layer{suffix}.md")
+    analysis.save(md, out)
+    print(f"记录 {len(records)} 次运行，臂 {scs}")
+    print(f"报告：{out}")
+    return 0
 
 
 if __name__ == "__main__":

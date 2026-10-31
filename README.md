@@ -13,14 +13,17 @@
 |---|---|
 | 表演参数契约（schema） | ✅ 完成，含 evidence 归因校验 |
 | 金标准参考实现（移植自 `manga-performance-director`） | ✅ 完成，零 LLM 调用、确定性 |
-| 判卷 L1（规则）+ L2（容差 / 部分分） | ✅ 完成，17 个单测覆盖 |
+| 判卷 L1（规则）+ L2（容差 / 部分分） | ✅ 完成，23 个单测覆盖 |
 | 五个 scaffold + 修复循环（只回传 L1 错误） | ✅ 完成 |
 | 指标：pass@1 / pass^k / 命中率 / 违反率 / 聚类 Bootstrap / 阈值敏感性 | ✅ 完成 |
-| Mock 校准（离线、零成本、可复现） | ✅ 完成 |
-| 真实模型接入（OpenAI 兼容） | ✅ 代码就绪，**待你的 API key** |
+| Mock 校准（离线、零成本、可复现） | ✅ 完成，产物写 `*_mock.*` 不覆盖真实记录 |
+| 真实模型接入（OpenAI 兼容） | ✅ 已跑通，单层 195 次 + 两层 306 次调用 |
+| 两层架构（模型判读 / 代码标定） | ✅ 完成，`run_two_layer.py` |
+| 台词库与场景规模 | ✅ 139 句唯一台词 / 51 场，10 个线索桶覆盖 |
+| 按作品留出（holdout） | ✅ 完成，25% 作品留出，记录带 `split` 字段 |
 | 页面（分镜 + 判卷 + 五臂对比合一） | ✅ 完成（M2），零依赖单页 |
+| 人工标注 + κ 校准工具 | ✅ 工具就绪，**待你本人填 166 行** |
 | L3 VLM 辅助判卷 | ⬜ 未开始（M5 可选） |
-| 人工标注 + κ 校准 | ⬜ 未开始（需要你本人） |
 
 **Mock 跑出来的数字不是实验结果。** 它只用来验证判卷与指标链路是否自洽
 （对应项目一的 Mock sanity check）。
@@ -33,20 +36,33 @@
 cd manga-director
 
 python run_demo.py                  # Mock 校准，零依赖、离线、可复现
-python -m unittest discover -s tests   # 17 个单测
+python -m unittest discover -s tests   # 23 个单测
 
-# 接真实模型（任选其一）
-$env:DEEPSEEK_API_KEY="sk-xxx"
-python run_demo.py api 5 deepseek-chat
-# 换任意 OpenAI 兼容端点
-$env:MDH_BASE_URL="https://dashscope.aliyuncs.com/compatible-mode/v1"
-python run_demo.py api 5 qwen-plus
+# 接真实模型
+python run_demo.py api 3 deepseek-ai/DeepSeek-V3.2          # 单层五臂
+python run_two_layer.py api 3 deepseek-ai/DeepSeek-V3.2     # 两层（判读/标定分离）
+MDH_N_SCENES=50 MDH_WORKERS=4 python run_two_layer.py api 3 # 扩规模 + 并发
+# 换任意 OpenAI 兼容端点：改 .env 里的 MDH_BASE_URL / MDH_API_KEY
 ```
 
 产物：
 
-- `outputs/report.md` —— 主报告（主表 / 逐字段误差 / 敏感性 / 禁令分解 / 自动诊断 / 失败样例）
-- `outputs/records.jsonl` —— 逐次运行记录（含每次的字段误差与指纹，可复核）
+- `outputs/report.md` / `records.jsonl` —— 单层主报告与逐次记录
+- `outputs/analysis_two_layer.md` / `records_two_layer.jsonl` —— 两层报告与记录
+- Mock 运行写 `report_mock.md` / `records_mock.jsonl`，**不会覆盖真实产物**
+  （这条是踩过坑才加的：mock 冒烟曾直接盖掉一份已交付的报告）
+
+### 人工标注（唯一必须你本人做的事）
+
+```bash
+python annotate.py export      # → annotations/form.csv（166 行，不含规则答案）
+# 填 arousal / valence / intent 三列，指南见 annotations/标注指南.md
+python annotate.py score       # 算 κ，并用人类金标重算模型 MAE
+```
+
+为什么非要人填：`reference.appraise()` 只吃 `text + subtext`，**看不见场景与关系**。
+所以此前的 arousal MAE 只能读作「与关键词表的一致率」，不是准确率。
+没有这一步，容差和 τ 全是拍的。
 
 ### 页面（M2）
 
@@ -141,11 +157,14 @@ python web/server.py        # → http://127.0.0.1:8770
 
 1. **金标准就是参考实现本身。** `restraint.py` 里的常数是导演常识而非拟合结果，
    所以它不是一个"客观正确答案"，而是一个**可追溯、可复算、可被替换的基线**。
-   缓解手段有三条：L1 不依赖金标准；容差敏感性必须报告；L3 VLM 提供独立证据源。
+   缓解手段有四条：L1 不依赖金标准；容差敏感性必须报告；L3 VLM 提供独立证据源；
+   **人工标注 + κ 检验规则表配不配当金标准**（`annotate.py`，工具已就绪）。
 2. **容差是设计变量，不是实证结论。** ±0.8 的 intensity 容差约等于"半档"，
    是行业直觉，需要真实标注数据来标定（M4 之后的人工作业）。
 3. **模板化场景不等于真实剧本。** 合成场景能控制因子、做消融，
    但不能替代真实剧本的分布——报告里必须分开写。
+   当前 51 场 / 139 句唯一台词，有效刺激是「文本 × 场景类型 × 潜台词」组合（154 个），
+   而不是行数 166——同文本的金标准相同，重复计数会虚增样本量。
 4. **`card_formula` 臂存在"送答案"嫌疑。** 它的作用是定位瓶颈，不是证明能力上限；
    真实实验里它应当作为**上界参考**，而不是拿来当成绩。
 
@@ -168,34 +187,42 @@ python web/server.py        # → http://127.0.0.1:8770
 
 ```
 manga-director/
-├── run_demo.py            # 一键入口：任务 × scaffold × k 次重复
+├── run_demo.py            # 单层入口：任务 × scaffold × k 次重复
+├── run_two_layer.py       # 两层入口：判读交给模型、标定交给代码
+├── reanalyze.py           # 零成本重分析已有记录（换口径，不重跑模型）
+├── annotate.py            # 人工标注：export 出表 / score 算 κ 并换尺子重算
+├── check_lines.py         # 台词库体检：桶分布 / 重复率 / arousal 离散度
 ├── web/
 │   ├── server.py          # 零依赖单页端（标准库 http.server）
 │   └── static/index.html  # 分镜 + 判卷 + 五臂对比，一屏三用
 ├── mdh/
 │   ├── schema.py          # 参数契约 + 结构/归因校验
 │   ├── reference.py       # 金标准（移植自 director/，零 LLM）
-│   ├── judge.py           # L1 规则 + L2 容差 + 部分分
+│   ├── judge.py           # L1 规则 + L2 容差 + 部分分 + 判读层判卷
 │   ├── tasks.py           # 场景任务 + 模板化生成 + 按作品切分
-│   ├── agents.py          # 5 个 scaffold + 修复循环
-│   ├── llm.py             # OpenAI 兼容后端 + Mock（注入已知缺陷）
+│   ├── lines.py           # 台词库（139 句，6 类场景 × 10 个线索桶）
+│   ├── agents.py          # 5 个 scaffold + judge_plain / judge_cue 判读臂
+│   ├── pipeline.py        # 两层流水线：模型出判读 → calibrate 出 7 参数
+│   ├── llm.py             # OpenAI 兼容后端 + Mock（注入已知缺陷）+ 退避重试
 │   ├── metrics.py         # pass@k / pass^k / 聚类 CI / 敏感性
+│   ├── analysis.py        # 连续口径 + 失败归因 + 逐字段 CI + 两层报告
+│   ├── annotate.py        # 人工标注 + κ / ρ / 换尺子重算
 │   ├── runner.py          # 编排 + 示例检索（跨作品隔离）
 │   └── report.py          # Markdown 报告 + 自动诊断
+├── annotations/           # form.csv（不入库）/ 标注指南.md
 ├── data/demo_scene.json   # 手写示例场景（来自表演指导原型）
-├── tests/test_core.py     # 17 个单测
-└── outputs/               # report.md / records.jsonl
+├── tests/test_core.py     # 23 个单测
+└── outputs/               # 真实报告与记录（mock 产物带 _mock 后缀）
 ```
 
 ---
 
-## 下一步（对应立项方案的 M3 / M4 / M5）
+## 下一步
 
-1. **接真模型跑第一轮**：`card_injected` vs `card_formula` 的差距一旦在真实模型上复现，
-   这就是本项目的核心发现。页面右上角切「真实模型」即可，不用改代码。
-2. **扩到 100 场戏**：模板因子（性格 × 场景 × 关系 × 潜台词类型）已经就位，
-   但**台词库只有 18 句**、同场景类型的三场戏台词完全相同——扩规模前必须先扩台词库，
-   否则真实模型可能在背题。
-3. **人工标注 150 条**：算 κ，用来校准容差与 τ——没有这一步，容差都是拍的。
-4. ~~页面~~ ✅ 已完成（分镜 + 判卷 + 五臂对比合一）。
-   页面还差一件：支持粘贴**自己的剧本**（当前只能选内置 13 场）。
+1. **填人工标注**（`python annotate.py export` 已出表）：166 行，约 1.5 小时。
+   这是唯一能回答「规则金标配不配当金标准」的路径，也是这份评测从
+   「自证」变成「可外部检验」的分界线。
+2. **加第二标注者**：现在的 κ 是「人 vs 规则」，不是「人 vs 人」。
+   两人各标一遍才算真正的信度。
+3. **页面接入两层模式**：现在页面只认单层五臂，两层结果还要看 Markdown。
+4. **支持粘贴自己的剧本**：当前只能选内置 51 场。

@@ -34,7 +34,9 @@ from mdh import schema  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STATIC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
-SCENES = tasks.build_tasks(n_generated=12)
+# 页面默认只加载 13 场（12 生成 + 1 手写示例）：页面是交互式点选，同步请求扛不住 51 场。
+# 要看全量就 MDH_N_SCENES=50 启动。
+SCENES = tasks.build_tasks(n_generated=int(os.environ.get("MDH_N_SCENES", "12")))
 BY_ID = {t["scene_id"]: t for t in SCENES}
 
 RUN_K_MAX = 8        # 单场：一次只跑一场戏，k 大一点也还快
