@@ -198,7 +198,7 @@ function paint(){
   h += `<div class="${cls('intent', tDone)}"><h4>③ 主导意图 intent
         <em>这句话在推动剧情上最主要的那一个</em></h4><div class="opts">`;
   state.intents.forEach((name, k) => {
-    const key = k < 9 ? String(k + 1) : (k === 9 ? '0' : 'Q');
+    const key = k < 9 ? String(k + 1) : (k === 9 ? '0' : (k === 10 ? 'Q' : 'W'));
     const on = state.t === name ? ' on' : '';
     h += `<button class="opt wide${on}" data-t="${esc(name)}">${esc(name)}<kbd>${key}</kbd></button>`;
   });
@@ -286,6 +286,7 @@ document.addEventListener('keydown', e => {
     if (/^[1-9]$/.test(k)) idx = Number(k) - 1;
     else if (k === '0') idx = 9;
     else if (k.toLowerCase() === 'q') idx = 10;
+    else if (k.toLowerCase() === 'w') idx = 11;
     if (idx >= 0 && idx < state.intents.length){
       state.t = state.intents[idx]; save(true); return;
     }

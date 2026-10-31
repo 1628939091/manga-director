@@ -47,9 +47,11 @@ KEY = os.path.join(ANN_DIR, "key.jsonl")
 OUT_MD = os.path.join(ANN_DIR, "human_gold_report.md")
 RECORDS = os.path.join(ROOT, "outputs", "records_two_layer.jsonl")
 
-# 标注选项必须与 reference.CUE_TABLE 的 intent 取值同集，否则没法算 κ
+# 前 11 个与 reference.CUE_TABLE / agents.INTENT_GLOSS 同集（κ 和意图准确率都算在这 11 类上）。
+# 「其他」只出现在人工标注侧：规则表永远不会输出它，所以人选「其他」= 该句记为不一致。
+# 这是刻意留给标注者的逃生门——硬填一个心里不服的标签，比诚实记「其他」更污染 κ。
 INTENTS = ["威胁", "认错", "挽留", "表白/安抚", "隐忍", "玩笑",
-           "惊喜", "危机", "质疑", "忐忑", "陈述"]
+           "惊喜", "危机", "质疑", "忐忑", "陈述", "其他"]
 
 AROUSAL_BINS = list(range(1, 11))          # 1..10 整数，10 档
 VALENCE_EDGES = [-1.0, -0.6, -0.2, 0.2, 0.6, 1.0]   # 5 档

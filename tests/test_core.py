@@ -213,7 +213,10 @@ class TestAnnotate(unittest.TestCase):
 
     def test_intents_match_reference_table(self):
         used = {row[3] for row in ref.CUE_TABLE} | {"忐忑", "陈述"}
-        self.assertEqual(set(annotate.INTENTS), used)
+        # 「其他」只存在于人工标注侧，是逃生门：规则表永不输出它，
+        # 人选「其他」即该句记为不一致——这正是它该有的语义。
+        self.assertEqual(set(annotate.INTENTS) - {"其他"}, used)
+        self.assertIn("其他", annotate.INTENTS)
 
 
 if __name__ == "__main__":
