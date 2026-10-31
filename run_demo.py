@@ -40,17 +40,26 @@ def main(argv: list[str]) -> int:
 
     print(BANNER)
 
-    all_tasks = tasks.build_tasks(n_generated=12)
-    # Mock 演示用全量评估（4 场的 holdout 太小，1 场 = 25 个百分点，读不出东西）。
-    # 示例检索仍然按 work 隔离：fewshot_examples 会跳过同 work 的场景。
+    n_gen = int(os.environ.get("MDH_N_SCENES", "50"))
+    all_tasks = tasks.build_tasks(n_generated=n_gen)
+    # 按作品切分：同一部作品的角色卡与说话风格相同，按场景随机切会泄漏
     split = tasks.split_by_work(all_tasks, holdout_ratio=0.25)
+    for t in split["train"]:
+        t["split"] = "train"
+    for t in split["test"]:
+        t["split"] = "test"
+    all_tasks = split["train"] + split["test"]
+    # 全量都评（train + test 一起跑），但记录里带 split 字段，
+    # 报告按划分分组出指标——这样既能报总表，也能回答「换一批戏还成不成立」。
     eval_tasks = all_tasks
     pool = all_tasks
+    n_test = sum(1 for t in all_tasks if t.get("split") == "test")
 
     n_lines = sum(len(t["lines"]) for t in eval_tasks)
     print(f"场景 {len(eval_tasks)} 场 / 台词 {n_lines} 条 | "
           f"k={k} | 脚手架 {len(SCAFFOLDS)} 个 | 模式 {mode}")
-    print(f"作品 {len({t['work_id'] for t in all_tasks})} 部（示例检索按 work 隔离，不跨作品泄漏）\n")
+    print(f"作品 {len({t['work_id'] for t in all_tasks})} 部，"
+          f"按 work_id 留出 {n_test} 场（示例检索也按 work 隔离，不跨作品泄漏）\n")
 
     if mode == "api":
         temperature = float(os.environ.get("MDH_TEMPERATURE", "0.7"))
@@ -74,7 +83,9 @@ def main(argv: list[str]) -> int:
     )
 
     os.makedirs(OUT_DIR, exist_ok=True)
-    records_path = os.path.join(OUT_DIR, "records.jsonl")
+    # Mock 与真实运行分文件存放：mock 只用来验证链路，绝不能覆盖已跑完的真实记录与报告
+    suffix = "" if mode == "api" else "_mock"
+    records_path = os.path.join(OUT_DIR, f"records{suffix}.jsonl")
     runner.save_records(records, records_path)
 
     md = report.render(records, {
@@ -87,7 +98,7 @@ def main(argv: list[str]) -> int:
         "model": getattr(backend, "model", getattr(backend, "name", "-")),
         "split": f"评估 {len(eval_tasks)} 场；金标准示例仅取自其他作品（按 work_id 隔离）",
     })
-    report_path = os.path.join(OUT_DIR, "report.md")
+    report_path = os.path.join(OUT_DIR, f"report{suffix}.md")
     with open(report_path, "w", encoding="utf-8") as f:
         f.write(md)
 

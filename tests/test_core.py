@@ -12,7 +12,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from mdh import agents, judge, metrics, reference as ref, runner, schema, tasks  # noqa: E402
+from mdh import agents, annotate, judge, metrics, reference as ref, runner, schema, tasks  # noqa: E402
 
 
 def demo_task():
@@ -177,6 +177,43 @@ class TestTasks(unittest.TestCase):
         train_works = {t["work_id"] for t in sp["train"]}
         test_works = {t["work_id"] for t in sp["test"]}
         self.assertFalse(train_works & test_works)
+
+
+class TestAnnotate(unittest.TestCase):
+    """一致性度量本身也要被测——算错 κ 会把「规则表可用」错判成「规则表不可用」。"""
+
+    def test_kappa_perfect_and_chance(self):
+        a = [1, 2, 3, 4, 1, 2, 3, 4]
+        self.assertAlmostEqual(annotate.cohen_kappa(a, a), 1.0)
+        # 两个标注者的边际分布完全不同 → 一致性不高于碰巧，κ ≤ 0
+        self.assertLessEqual(annotate.cohen_kappa([1, 1, 1, 1], [2, 2, 2, 2]), 0.0)
+
+    def test_weighted_kappa_near_miss_beats_far_miss(self):
+        gold = [1, 2, 3, 4, 5, 6, 7, 8]
+        near = [2, 3, 4, 5, 6, 7, 8, 8]      # 每行偏 1 档
+        far = [4, 4, 4, 4, 4, 4, 4, 4]       # 一律压中间，与金标几乎无关
+        self.assertGreater(annotate.weighted_kappa(near, gold),
+                           annotate.weighted_kappa(far, gold))
+
+    def test_weighted_kappa_degenerates_without_variance(self):
+        # 取值全同时 κ 无定义（只有一个类别），必须返回 None 而不是 1.0——
+        # 真实标注里会出现「某个场景 20 句全标 5」，把它当满分会把整体 κ 抬上去。
+        self.assertIsNone(annotate.weighted_kappa([5, 5, 5, 5], [5, 5, 5, 5]))
+
+    def test_spearman_monotone(self):
+        self.assertAlmostEqual(annotate.spearman([1, 2, 3], [10, 20, 30]), 1.0)
+        self.assertAlmostEqual(annotate.spearman([1, 2, 3], [30, 20, 10]), -1.0)
+
+    def test_valence_bin_covers_edges(self):
+        self.assertEqual(annotate.valence_bin(-1.0), 0)
+        self.assertEqual(annotate.valence_bin(0.0), 2)
+        self.assertEqual(annotate.valence_bin(1.0), 4)
+        # 越界值不能抛异常（标注表里可能手滑写 1.5）
+        self.assertEqual(annotate.valence_bin(1.5), 4)
+
+    def test_intents_match_reference_table(self):
+        used = {row[3] for row in ref.CUE_TABLE} | {"忐忑", "陈述"}
+        self.assertEqual(set(annotate.INTENTS), used)
 
 
 if __name__ == "__main__":

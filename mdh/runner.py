@@ -32,6 +32,7 @@ def _run_one(task: dict, scaffold: str, rep: int, golds: dict, ex,
     except Exception as e:  # noqa: BLE001 - 网络/接口错误都要留痕，不能中断整批
         return {
             "scene_id": task["scene_id"], "work_id": task["work_id"],
+            "split": task.get("split"),
             "scaffold": scaffold, "repeat": rep, "tau": tau,
             "passed": False, "hit_rate": 0.0, "min_hit_rate": 0.0,
             "l1_clean": False, "errors": [f"调用失败: {e}"],
@@ -72,6 +73,7 @@ def _run_one(task: dict, scaffold: str, rep: int, golds: dict, ex,
     return {
         "scene_id": task["scene_id"],
         "work_id": task["work_id"],
+        "split": task.get("split"),
         "scaffold": scaffold,
         "repeat": rep,
         "tau": tau,
@@ -187,6 +189,7 @@ def save_records(records: list[dict], path: str) -> None:
     for r in records:
         slim.append({
             "scene_id": r["scene_id"], "work_id": r["work_id"],
+            "split": r.get("split"),
             "scaffold": r["scaffold"], "repeat": r["repeat"],
             "passed": r["passed"], "hit_rate": r["hit_rate"],
             "min_hit_rate": r["min_hit_rate"],

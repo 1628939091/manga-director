@@ -217,6 +217,35 @@ def _pct(x: float) -> str:
     return f"{x * 100:.1f}%"
 
 
+def split_breakdown(records: list[dict], scaffolds: list[str], tau: float) -> list[dict]:
+    """按 train / test 分组统计（test = 按 work_id 留出的作品）。
+
+    为什么要单列一表：如果只有 train 指标，任何"臂比臂好"的结论都无法排除
+    "在见过的作品上调好了提示词"。按作品留出才能回答"换一批戏还成不成立"。
+    同一部作品的角色卡与说话风格相同，按场景随机切分会泄漏——
+    这是评测基准建设的基本纪律。
+    """
+    splits = [s for s in ("train", "test")
+              if any(r.get("split") == s for r in records)]
+    out = []
+    for sc in scaffolds:
+        for sp in splits:
+            sub = [r for r in records if r["scaffold"] == sc and r.get("split") == sp]
+            if not sub:
+                continue
+            st_ = appraisal_stats(sub, sc)
+            out.append({
+                "scaffold": sc, "split": sp,
+                "scenes": len({r["scene_id"] for r in sub}),
+                "median": quantiles([r["hit_rate"] for r in sub])[2],
+                "ci": scene_mean_ci(sub, sc),
+                "wrong": avg_wrong_fields(sub, sc),
+                "mae": st_["arousal_mae"] if st_["n"] else None,
+                "pass1": sum(1 for r in sub if r["passed"]) / len(sub),
+            })
+    return out
+
+
 def _ci(ci, pct: bool = True) -> str:
     lo, hi, pt = ci
     if pct:
@@ -229,6 +258,7 @@ def render_real(records: list[dict], meta: dict) -> str:
     k = meta.get("k", 0)
     tau = meta.get("tau", 0.8)
     need = required_hit_rate(len(FIELDS), tau)
+    n_scene = len({r["scene_id"] for r in records if r["scaffold"] == scs[0]}) if scs else 0
     L: list[str] = []
 
     L.append("# 真实模型运行分析（连续口径 + 失败归因）")
@@ -313,7 +343,7 @@ def render_real(records: list[dict], meta: dict) -> str:
         for f in FIELDS:
             L.append(f"| {FIELD_CN[f]} | {_ci(field_hit_ci(records, target, f))} |")
         L.append("")
-        L.append(f"> 上表是 `{target}`。区间按场景聚类（13 个簇），"
+        L.append(f"> 上表是 `{target}`。区间按场景聚类（{n_scene} 个簇），"
                  "所以宽度反映的是「换一批戏还成不成立」，不是「行数够不够」。")
         L.append("")
 
@@ -379,13 +409,12 @@ def render_real(records: list[dict], meta: dict) -> str:
     # ---------------- 7 ----------------
     L.append("## 7. 局限（必须一起报）")
     L.append("")
-    n_scene = len({r["scene_id"] for r in records if r["scaffold"] == scs[0]})
     n_lines = sum(len(r["rows"]) for r in records if r["scaffold"] == scs[0])
     L.append(f"- **样本太小**：{n_scene} 场戏。一场 = 约 {100 / n_scene:.0f} 个百分点，"
              "所以臂与臂之间 8 个点以内的差距现在不能下结论。")
-    L.append(f"- **台词库只有 18 句**，{n_lines} 行里同文本重复多次，"
-             "同一个文本的金标准一样，等于有效刺激只有 18 个。"
-             "任何「模型判读能力」的结论在这个规模上都只能当冒烟。")
+    L.append(f"- **有效刺激数**：{n_lines} 行台词，唯一文本由 `mdh/lines.py` 的库决定"
+             "（当前 139 句）。同文本的金标准相同，所以有效自由度按唯一文本数算，"
+             "不按行数算——这是本报告所有 MAE 的隐含分母。")
     L.append("- **金标准本身是规则**：参考实现的 arousal 来自关键词表，"
              "所以「与金标准一致」不等于「判对了」，只等于「和我的规则表一致」。"
              "要把它变成能力结论，必须补人工标注 + κ。")
@@ -602,15 +631,37 @@ def render_two_layer(records: list[dict], meta: dict, baseline: list[dict] | Non
     L.append("")
 
     # ---------------- 4 ----------------
-    L.append("## 4. 局限")
+    sb = split_breakdown(records, scs, tau)
+    if sb:
+        L.append("## 4. 留出集检验（按作品切分）")
+        L.append("")
+        L.append("| 臂 | 划分 | 场景数 | 场景平均命中率 | 聚类 95% CI | 每行错字段 | arousal MAE | 原始 pass@1 |")
+        L.append("|---|---|---|---|---|---|---|---|")
+        for row in sb:
+            mae = f"{row['mae']:.2f}" if row["mae"] is not None else "—"
+            L.append(f"| `{row['scaffold']}` | {row['split']} | {row['scenes']} | "
+                     f"{row['median']:.2f} | {_ci(row['ci'])} | {row['wrong']:.2f} | "
+                     f"{mae} | {_pct(row['pass1'])} |")
+        L.append("")
+        L.append("> 留出按 `work_id` 切：同一部作品的角色卡与说话风格相同，"
+                 "按场景随机切必然泄漏。test 组是模型在提示词里没见过的作品。"
+                 "两组差距小，说明结论没有过拟合到具体戏；差距大则要查提示词是否在背样本。")
+        L.append("")
+
+    # ---------------- 5 ----------------
+    L.append("## 5. 局限")
     L.append("")
+    n_scene = len({r["scene_id"] for r in records if r["scaffold"] == scs[0]})
+    n_lines = sum(len(r["rows"]) for r in records if r["scaffold"] == scs[0])
     L.append("- **判读层的金标准是规则，不是人。** 结论只能表述为"
-             "「与参考实现的关键词表一致率」，不能表述为「情绪判读准确率」。")
-    L.append("- **有效刺激只有 18 句。** 台词库固定，同一文本重复出现，"
-             "MAE 的自由度远小于行数看起来的样子。")
+             "「与参考实现的关键词表一致率」，不能表述为「情绪判读准确率」。"
+             "补人工标注 + κ 才能变成能力结论。")
+    L.append(f"- **样本仍不算大**：{n_scene} 场 / {n_lines} 行。"
+             "一场约等于几个百分点，臂间小于这个量级的差距不要下结论。")
+    L.append("- **台词库是模板偏置的**：台词按线索桶设计，措辞比真实剧本更「线索密集」，"
+             "所以绝对准确率会偏高。它测的是「能不能按线索对齐」，不是「能不能读真实剧本」。")
     L.append("- **valence 不进任何下游计算**（`calibrate` 只用 arousal），"
              "所以它只影响导演备注；把它算进「判读综合分」会虚高。")
-    L.append("- 样本 13 场，臂间差距 < 8 个百分点不足以判断优劣。")
     L.append("")
     return "\n".join(L)
 

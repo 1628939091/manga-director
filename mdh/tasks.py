@@ -21,6 +21,8 @@ import json
 import os
 import random
 
+from . import lines
+
 # --------------------------------------------------------------------------
 # 角色原型（性格四维 → 决定表演强度上限，是金标准的核心输入）
 # --------------------------------------------------------------------------
@@ -71,14 +73,6 @@ SCENE_TEMPLATES = {
     },
 }
 
-SUBTEXTS = [
-    "其实心跳很快，怕被拒绝",
-    "当众被顶撞，怒但需维持威严",
-    "纯粹的开心",
-    "忍着，不能让他看出来",
-    "",
-    "表面平静，心里已经乱了",
-]
 
 DEMO_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)),
                          "data", "demo_scene.json")
@@ -96,17 +90,26 @@ def make_scene(scene_id: str, work_id: str, title: str, cast: list[str],
     }
 
 
-def generate_scenes(n: int = 12, seed: int = 20261030, scenes_per_work: int = 2) -> list[dict]:
-    """受控因子组合生成场景。确定性（固定 seed），可复现。"""
+def generate_scenes(n: int = 50, seed: int = 20261030, scenes_per_work: int = 2) -> list[dict]:
+    """受控因子组合生成场景。确定性（固定 seed），可复现。
+
+    与 v0 的三个区别：
+    1. 台词从 `lines.SCENE_LINES` 取，**同一作品内不重复**（v0 同类型场景台词完全相同）
+    2. 场景类型按轮次配平，且每部作品的"类型组合"错开，避免类型与 work_id 混淆
+    3. 潜台词分中性/紧张两档，紧张档会触发金标准的 +1.2 加成，
+       使 arousal 取值从 10 个扩到 15 个——判读任务不再是"十选一"
+    """
     rng = random.Random(seed)
-    scene_types = list(SCENE_TEMPLATES)
+    scene_types = list(lines.SCENE_LINES)
     cast_pool = list(ARCHETYPES)
-    scenes = []
+    scenes: list[dict] = []
+    used_by_work: dict[str, set[str]] = {}
 
     for i in range(n):
-        st = scene_types[i % len(scene_types)]
+        # 轮次配平：50 场 / 6 类 ≈ 每类 8–9 场；偏移量让不同作品的类型组合不完全相同
+        st = scene_types[(i + i // len(scene_types)) % len(scene_types)]
         tpl = SCENE_TEMPLATES[st]
-        where = tpl["where"][i % len(tpl["where"])]
+        where = tpl["where"][(i // len(scene_types)) % len(tpl["where"])]
         work_id = f"gen{i // scenes_per_work:02d}"
         scene_id = f"{work_id}-S{i % scenes_per_work + 1:02d}"
 
@@ -116,27 +119,37 @@ def generate_scenes(n: int = 12, seed: int = 20261030, scenes_per_work: int = 2)
             if c not in cast:
                 cast.append(c)
 
+        used = used_by_work.setdefault(work_id, set())
+        pool = [t for t in lines.SCENE_LINES[st] if t not in used]
         n_lines = rng.choice([3, 3, 4])
-        lines = []
-        for j in range(n_lines):
+        if len(pool) < n_lines:            # 库不够时退回全库（正常配置下不会触发）
+            used.clear()
+            pool = list(lines.SCENE_LINES[st])
+        picks = rng.sample(pool, n_lines)
+
+        line_rows = []
+        for j, text in enumerate(picks):
+            used.add(text)
             speaker = cast[j % len(cast)]
             listener = cast[(j + 1) % len(cast)]
             relation = rng.choice(tpl["relations"])
             # 让关系修正只在合理的方向上生效（长辈/上级不会出现在恋人关系里）
             if relation in ("恋人", "恋人未满") and speaker == "威严师父":
                 relation = "长辈"
-            lines.append({
+            tense = (i + j) % 4 == 0
+            subtext = rng.choice(lines.SUBTEXTS_TENSE if tense else lines.SUBTEXTS_NEUTRAL)
+            line_rows.append({
                 "id": f"{scene_id}-L{j + 1:02d}",
                 "character": speaker,
                 "scene": where,
                 "scene_type": st,
                 "listener": listener,
                 "relation": relation,
-                "text": tpl["lines"][j % len(tpl["lines"])],
-                "subtext": rng.choice(SUBTEXTS),
+                "text": text,
+                "subtext": subtext,
             })
 
-        scenes.append(make_scene(scene_id, work_id, f"{where}·{st}", cast, lines))
+        scenes.append(make_scene(scene_id, work_id, f"{where}·{st}", cast, line_rows))
 
     return scenes
 

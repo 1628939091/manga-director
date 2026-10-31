@@ -40,7 +40,15 @@ def main(argv: list[str]) -> int:
     k = int(argv[2]) if len(argv) > 2 else 3
     model = argv[3] if len(argv) > 3 else "deepseek-ai/DeepSeek-V3.2"
 
-    all_tasks = tasks.build_tasks(n_generated=12)
+    n_gen = int(os.environ.get("MDH_N_SCENES", "50"))
+    all_tasks = tasks.build_tasks(n_generated=n_gen)
+    # 按作品切分：同一部作品的角色卡与说话风格相同，按场景随机切会泄漏
+    split = tasks.split_by_work(all_tasks, holdout_ratio=0.25)
+    for t in split["train"]:
+        t["split"] = "train"
+    for t in split["test"]:
+        t["split"] = "test"
+    all_tasks = split["train"] + split["test"]
     n_lines = sum(len(t["lines"]) for t in all_tasks)
 
     print("=" * 62)
@@ -69,7 +77,9 @@ def main(argv: list[str]) -> int:
     )
 
     os.makedirs(OUT_DIR, exist_ok=True)
-    rec_path = os.path.join(OUT_DIR, "records_two_layer.jsonl")
+    # Mock 与真实运行分文件存放：mock 只用来验证链路，绝不能覆盖已跑完的真实记录与报告
+    suffix = "" if mode == "api" else "_mock"
+    rec_path = os.path.join(OUT_DIR, f"records_two_layer{suffix}.jsonl")
     runner.save_records(records, rec_path)
 
     base_path = os.path.join(OUT_DIR, "records.jsonl")
@@ -79,7 +89,7 @@ def main(argv: list[str]) -> int:
         "scaffolds": list(ARMS), "k": k, "tau": judge.DEFAULT_TAU,
         "model": getattr(backend, "model", getattr(backend, "name", "-")),
     }, baseline=baseline)
-    out = os.path.join(OUT_DIR, "analysis_two_layer.md")
+    out = os.path.join(OUT_DIR, f"analysis_two_layer{suffix}.md")
     analysis.save(md, out)
 
     print("\n--- 摘要 ---")
