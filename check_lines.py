@@ -19,6 +19,14 @@ from mdh import reference as ref  # noqa: E402
 
 ORDER = ["威胁", "认错", "挽留", "表白/安抚", "隐忍", "玩笑", "惊喜", "危机", "质疑", "陈述", "忐忑"]
 
+# neutral 必须是"内心状态"，不能退回"脸色沉下来 / 指了指门口"这类外部描写。
+# 否则 neutral 与 tense 就不是同一维度的两个水平，标注时会出现割裂感（2026-10-31）。
+NEUTRAL_MARKERS = (
+    "心里", "内心", "心底", "心头", "心下", "脑子里", "只当", "不在意",
+    "坦然", "平静", "淡定", "波澜", "有数", "有底", "明白", "服气",
+    "笃定", "不屑", "不服", "不甘", "舍不得", "顾不上",
+)
+
 
 def bucket_of(text: str, subtext: str = "") -> tuple[str, float, float]:
     r = ref.appraise(text, subtext)
@@ -51,12 +59,14 @@ def main() -> int:
     # neutral 必须"干净"：不含触发词，也不含任何 CUE_TABLE 关键词，
     # 否则它自己就能决定金标，台词读不读得懂就无所谓了。
     cue_words = _cue_words()
-    bad_neutral, bad_tense, hijack = [], [], []
+    bad_neutral, bad_tense, hijack, bad_marker = [], [], [], []
     for text, neu, ten in pairs:
         if any(w in neu for w in lines.NEUTRAL_FORBIDDEN):
             bad_neutral.append((text, neu, "含触发词"))
         elif any(w in neu for w in cue_words):
             bad_neutral.append((text, neu, "含线索词，会替代台词定金标"))
+        if not any(w in neu for w in NEUTRAL_MARKERS):
+            bad_marker.append((text, neu, "不是内心状态（退回动作/神态描写）"))
         if not any(w in ten for w in lines.TENSE_CUES):
             bad_tense.append((text, ten, "不含触发词，+1.2 不生效"))
         # tense 不能把台词拖进更靠前的桶（顺序取第一个命中）。
@@ -71,13 +81,16 @@ def main() -> int:
     print(f"  neutral 干净: {len(pairs) - len(bad_neutral)} / {len(pairs)}")
     for t, s, why in bad_neutral[:6]:
         print(f"    ❌ {t} | {s} —— {why}")
+    print(f"  neutral 是内心状态: {len(pairs) - len(bad_marker)} / {len(pairs)}")
+    for t, s, why in bad_marker[:6]:
+        print(f"    ❌ {t} | {s} —— {why}")
     print(f"  tense 触发词有效: {len(pairs) - len(bad_tense)} / {len(pairs)}")
     for t, s, why in bad_tense[:6]:
         print(f"    ❌ {t} | {s} —— {why}")
     print(f"  tense 未劫持桶归属: {len(pairs) - len(hijack)} / {len(pairs)}")
     for t, s, b1, b2 in hijack[:6]:
         print(f"    ❌ {t} | {s} —— {b1} 被改成 {b2}")
-    if bad_neutral or bad_tense or hijack:
+    if bad_neutral or bad_tense or hijack or bad_marker:
         ok = False
 
     # ---- 3. 桶覆盖（按 neutral 潜台词，即"只凭台词"时的金标）----
