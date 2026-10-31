@@ -644,16 +644,32 @@ def render_two_layer(records: list[dict], meta: dict, baseline: list[dict] | Non
         L.append("")
         L.append(f"- **拆层效应**：{layer_eff[0]:+.2f}（不给表）/ {layer_eff[1]:+.2f}（给表）")
         L.append(f"- **给表效应**：{cue_eff[0]:+.2f}（单层）/ {cue_eff[1]:+.2f}（两层）")
-        L.append(f"- **交互**：{inter:+.2f}"
-                 f"（|{abs(inter):.2f}| 越接近 0，两个因子越近似可加）")
+        # 「交互接近 0」不能靠嘴说：0.03 可以说可加，0.08 就不能。
+        # 分档写出来，免得数字变了判语还停在上一次的口径上。
+        if abs(inter) <= 0.05:
+            inter_note = "交互接近 0，两个因子近似可加"
+        elif abs(inter) <= 0.10:
+            inter_note = (f"交互 {inter:+.2f} 不可忽略——两个因子**不是**简单可加，"
+                          "报数时不能只给两个主效应")
+        else:
+            inter_note = f"交互 {inter:+.2f} 明显，不能把两个因子当独立因素解释"
+        L.append(f"- **交互**：{inter:+.2f}（= 给表效应在两层里减去在单层里）")
         L.append("")
+
         # 结论算出来，不写死（与第 0 节同一纪律）
         if min(layer_eff) > 0 and min(map(abs, layer_eff)) > max(map(abs, cue_eff)):
             L.append("> **主效应是「拆层」，不是「给答案」。**"
                      f"拆层效应（{min(map(abs, layer_eff)):.2f}~{max(map(abs, layer_eff)):.2f}）"
                      f"大于给表效应（{min(map(abs, cue_eff)):.2f}~{max(map(abs, cue_eff)):.2f}），"
-                     "且在两个水平上方向一致、交互接近 0。"
+                     f"且在两个水平上方向一致；{inter_note}。"
                      "「提升是不是靠喂线索表」这个质疑不成立。")
+            if abs(inter) > 0.05 and inter > 0:
+                L.append(">")
+                L.append("> 正交互的方向是可解释的：给表在两层里更值钱"
+                         f"（{cue_eff[0]:+.2f} → {cue_eff[1]:+.2f}）。"
+                         "线索表直接抬高 arousal 判读，而两层架构会把「判得更准的 "
+                         "arousal」按公式放大到 7 个派生参数上；单层拿同样的表，"
+                         "仍要靠模型自己做算术，放大不了。")
         elif min(layer_eff) > 0:
             L.append("> **拆层有正向效应，但给表效应与之相当。**"
                      "不能声称「提升主要来自拆层」，只能说两者叠加；"
