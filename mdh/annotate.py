@@ -246,8 +246,8 @@ def cmd_export(limit: int | None = None, seed: int = 20261030) -> int:
     print(f"指南　：{os.path.join(ANN_DIR, '标注指南.md')}")
     print(f"共 {len(slots)} 行，唯一文本 {len({s['text'] for s in slots})} 个，"
           f"唯一(文本,场景类型,潜台词) {len({(s['text'], s['scene_type'], s['subtext']) for s in slots})} 个")
-    est = len(slots) * 0.5
-    print(f"按每行 30 秒估，约 {max(1, round(est / 60))} 分钟填完")
+    est_min = len(slots) * 30 / 60          # 每行 30 秒
+    print(f"按每行 30 秒估，约 {est_min:.0f} 分钟填完")
     return 0
 
 

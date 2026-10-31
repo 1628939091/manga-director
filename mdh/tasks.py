@@ -120,7 +120,7 @@ def generate_scenes(n: int = 50, seed: int = 20261030, scenes_per_work: int = 2)
                 cast.append(c)
 
         used = used_by_work.setdefault(work_id, set())
-        pool = [t for t in lines.SCENE_LINES[st] if t not in used]
+        pool = [pr for pr in lines.SCENE_LINES[st] if pr[0] not in used]
         n_lines = rng.choice([3, 3, 4])
         if len(pool) < n_lines:            # 库不够时退回全库（正常配置下不会触发）
             used.clear()
@@ -128,7 +128,7 @@ def generate_scenes(n: int = 50, seed: int = 20261030, scenes_per_work: int = 2)
         picks = rng.sample(pool, n_lines)
 
         line_rows = []
-        for j, text in enumerate(picks):
+        for j, (text, sub_neutral, sub_tense) in enumerate(picks):
             used.add(text)
             speaker = cast[j % len(cast)]
             listener = cast[(j + 1) % len(cast)]
@@ -136,8 +136,11 @@ def generate_scenes(n: int = 50, seed: int = 20261030, scenes_per_work: int = 2)
             # 让关系修正只在合理的方向上生效（长辈/上级不会出现在恋人关系里）
             if relation in ("恋人", "恋人未满") and speaker == "威严师父":
                 relation = "长辈"
+            # 潜台词与台词逐句配对（lines.py 里成对写好），不再随机抽短语：
+            # 随机抽会把「表面平静，心里没底」配给「这猫好可爱」，而潜台词
+            # 会进 reference.appraise() 的加成分支——等于用随机数改写金标
             tense = (i + j) % 4 == 0
-            subtext = rng.choice(lines.SUBTEXTS_TENSE if tense else lines.SUBTEXTS_NEUTRAL)
+            subtext = sub_tense if tense else sub_neutral
             line_rows.append({
                 "id": f"{scene_id}-L{j + 1:02d}",
                 "character": speaker,
