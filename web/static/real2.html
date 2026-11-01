@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>真实剧本 v2 · arousal 标注（100 句）</title>
+<style>
+  :root{
+    --bg:#f5f6f8; --panel:#ffffff; --line:#e3e6ec; --line-soft:#eef0f4;
+    --ink:#141a24; --ink-2:#4b5566; --ink-3:#8a93a5;
+    --brand:#2f5bea; --brand-soft:#eaf0ff;
+    --ok:#12805c; --ok-soft:#e6f6ef;
+    --bad:#c62828; --bad-soft:#fdecec;
+    --radius:10px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%}
+  body{
+    background:var(--bg);color:var(--ink);
+    font:14px/1.6 -apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    -webkit-font-smoothing:antialiased;
+    display:flex;flex-direction:column;min-height:100vh;
+  }
+
+  .top{position:sticky;top:0;z-index:10;height:56px;display:flex;align-items:center;gap:14px;
+    padding:0 18px;background:var(--panel);border-bottom:1px solid var(--line)}
+  .logo{display:flex;align-items:center;gap:9px;font-weight:700}
+  .logo i{width:22px;height:22px;border-radius:6px;background:linear-gradient(135deg,#2f5bea,#7c3aed)}
+  .logo small{font-weight:500;color:var(--ink-3);font-size:12px}
+  .top .spacer{flex:1}
+  .prog{width:190px;height:7px;border-radius:99px;background:#e9ecf2;overflow:hidden}
+  .prog i{display:block;height:100%;width:0;background:linear-gradient(90deg,#2f5bea,#7c3aed);transition:width .18s}
+  .count{font-variant-numeric:tabular-nums;color:var(--ink-2);font-size:15px;font-weight:600;min-width:66px;text-align:right}
+
+  .anchor-strip{background:#fbfcfe;border-bottom:1px solid var(--line-soft);padding:7px 18px;
+    font-size:13px;color:var(--ink-2);text-align:center;letter-spacing:.2px}
+  .anchor-strip b{color:var(--ink);font-weight:600}
+
+  .wrap{flex:1;max-width:820px;width:100%;margin:0 auto;padding:22px 18px 18px}
+  .banner{display:none;margin:0 0 12px;padding:9px 12px;border-radius:8px;
+    background:var(--bad-soft);border:1px solid #f3c9c9;color:var(--bad);font-size:13px}
+  .banner.on{display:block}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    padding:20px 26px 18px;display:flex;flex-direction:column;min-height:360px}
+
+  .metarow{display:flex;align-items:center;gap:10px;padding-bottom:14px;
+    border-bottom:1px solid var(--line-soft);margin-bottom:16px}
+  .metarow .n{font-variant-numeric:tabular-nums;font-size:13px;font-weight:600;color:var(--ink-2)}
+  .metarow .n b{font-size:17px;color:var(--brand)}
+  .metarow .spacer{flex:1}
+  .chip{font-size:12px;padding:3px 10px;border-radius:999px;background:#f2f4f8;
+    border:1px solid var(--line);color:var(--ink-2)}
+  .chip.src{background:var(--brand-soft);border-color:#cfdcff;color:#2f5bea;font-weight:600}
+
+  .ctx{margin:0 0 2px}
+  .ctx .tag{font-size:11px;color:#a8b0bf;letter-spacing:.6px;margin-bottom:2px}
+  .ctx .t{font-size:14px;color:var(--ink-3);line-height:1.5;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .ctx.top{margin-bottom:14px}
+  .ctx.bot{margin-top:14px}
+
+  .speaker{font-size:14px;color:var(--ink-2);margin:0 0 4px}
+  .speaker b{color:var(--ink);font-weight:600}
+  .line{font-size:31px;line-height:1.42;font-weight:650;letter-spacing:.4px;margin:0 0 2px;
+    text-wrap:pretty}
+
+  .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:auto;padding-top:20px;
+    border-top:1px solid var(--line-soft)}
+  .kbtn{font:inherit;font-size:12px;color:var(--ink-2);background:#fafbfd;
+    border:1px solid var(--line);border-bottom-width:2px;border-radius:7px;
+    padding:5px 11px;cursor:pointer}
+  .kbtn:hover{background:#f2f4f8}
+  .kbtn:active{border-bottom-width:1px;transform:translateY(1px)}
+  .kbtn b{color:var(--ink);font-weight:600}
+  .actions .spacer{flex:1}
+  .saved{font-size:12px;color:var(--ok);opacity:0;transition:opacity .2s;align-self:center}
+  .saved.on{opacity:1}
+
+  .done-box{display:none;align-items:center;justify-content:center;flex-direction:column;
+    padding:70px 0;text-align:center}
+  .done-box.on{display:flex}
+  .done-box .icon{width:44px;height:44px;border-radius:50%;background:var(--ok-soft);
+    color:var(--ok);display:flex;align-items:center;justify-content:center;
+    font-size:22px;font-weight:600;margin-bottom:16px}
+  .done-box .big{font-size:26px;font-weight:600;margin-bottom:10px}
+  .done-box .hint{color:var(--ink-2);font-size:14px}
+
+  .foot{padding:10px 18px 16px;text-align:center;font-size:12px;color:var(--ink-3)}
+  .flash{position:fixed;left:50%;top:14px;transform:translateX(-50%);
+    background:#141a24;color:#fff;font-size:12px;padding:6px 12px;border-radius:99px;
+    opacity:0;transition:opacity .15s;pointer-events:none;z-index:50}
+  .flash.on{opacity:.92}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="logo"><i></i>真实剧本 v2<small>100 句 · 外部效度 · arousal</small></div>
+  <div class="spacer"></div>
+  <div class="prog"><i id="bar"></i></div>
+  <div class="count" id="count">— / —</div>
+</div>
+
+<div class="anchor-strip">
+  <b>1–2</b> 放空｜<b>3–4</b> 平静｜<b>5–6</b> 专注或隐忍｜<b>7–8</b> 紧张急切｜<b>9–10</b> 濒临失控
+</div>
+
+<div class="wrap">
+  <div class="banner" id="net"></div>
+
+  <div class="card" id="card">
+    <div class="metarow">
+      <div class="n">序号 <b id="rowno">—</b> / <span id="total">—</span></div>
+      <div class="spacer"></div>
+      <span class="chip src" id="src">—</span>
+      <span class="chip" id="scene">—</span>
+    </div>
+
+    <div class="ctx top" id="prevbox">
+      <div class="tag">前一句</div>
+      <div class="t" id="prev"></div>
+    </div>
+
+    <div class="speaker" id="who"></div>
+    <div class="line" id="line">载入中…</div>
+
+    <div class="ctx bot" id="nextbox">
+      <div class="tag">后一句</div>
+      <div class="t" id="next"></div>
+    </div>
+
+    <div class="actions">
+      <button class="kbtn" id="btn-key"><b>1–0</b> 选择 arousal</button>
+      <button class="kbtn" id="btn-prev"><b>←</b> 上一句</button>
+      <button class="kbtn" id="btn-skip"><b>空格</b> 跳过</button>
+      <div class="spacer"></div>
+      <div class="saved" id="saved">已保存</div>
+    </div>
+  </div>
+
+  <div class="done-box" id="done">
+    <div class="icon">✓</div>
+    <div class="big">100 句标完，回到对话里告诉助手</div>
+    <div class="hint" id="done-hint"></div>
+  </div>
+</div>
+
+<div class="foot">每按一次键即写入 <code>annotations/real_form_v2.csv</code>，只改 arousal 一列</div>
+
+<div class="flash" id="flash"></div>
+
+<script>
+let items = [], total = 0, idx = 0, busy = false;
+
+const $ = id => document.getElementById(id);
+
+function esc(s){
+  return String(s == null ? '' : s).replace(/[&<>"]/g,
+    c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+}
+
+function flash(msg){
+  const f = $('flash');
+  f.textContent = msg;
+  f.classList.add('on');
+  clearTimeout(flash._t);
+  flash._t = setTimeout(() => f.classList.remove('on'), 900);
+}
+
+function banner(msg){
+  const b = $('net');
+  if (!msg) { b.classList.remove('on'); b.textContent = ''; return; }
+  b.classList.add('on');
+  b.textContent = msg;
+}
+
+async function api(url, opt){
+  const ctl = new AbortController();
+  const isPost = !!(opt && opt.method === 'POST');
+  const timer = setTimeout(() => ctl.abort(), isPost ? 12000 : 8000);
+  try {
+    const r = await fetch(url, Object.assign({signal: ctl.signal}, opt || {}));
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return await r.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function render(){
+  if (!items.length) return;
+  if (idx >= total) return showDone();
+  const it = items[idx];
+
+  $('card').style.display = 'flex';
+  $('done').classList.remove('on');
+
+  $('rowno').textContent = it.row;
+  $('total').textContent = total;
+  $('src').textContent = it.source || '—';
+  $('scene').textContent = it.scene || '—';
+
+  const hasPrev = (it.prev || '').trim().length > 0;
+  $('prevbox').style.display = hasPrev ? '' : 'none';
+  $('prev').textContent = it.prev || '';
+
+  const hasNext = (it.next || '').trim().length > 0;
+  $('nextbox').style.display = hasNext ? '' : 'none';
+  $('next').textContent = it.next || '';
+
+  $('who').innerHTML = '<b>' + esc(it.speaker || '—') + '</b>：';
+  $('line').textContent = it.text;
+
+  $('count').textContent = (idx + 1) + ' / ' + total;
+  $('bar').style.width = ((idx + 1) / total * 100).toFixed(2) + '%';
+  $('saved').classList.remove('on');
+}
+
+function showDone(){
+  $('card').style.display = 'none';
+  $('done').classList.add('on');
+  $('done-hint').textContent = 'real_form_v2.csv 的 ' + total + ' 行已全部填完';
+  $('count').textContent = total + ' / ' + total;
+  $('bar').style.width = '100%';
+}
+
+async function pick(n){
+  if (busy || idx >= total) return;
+  busy = true;
+  const it = items[idx];
+  let saved = false;
+  for (let attempt = 0; attempt < 3 && !saved; attempt++){
+    try {
+      const d = await api('/api/save', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({line_id: it.line_id, arousal: n})
+      });
+      if (!d.ok) throw new Error(d.error || '保存失败');
+      saved = true;
+      banner('');
+      items[idx].done = true;
+    } catch (e) {
+      if (attempt < 2) await new Promise(r => setTimeout(r, 350));
+    }
+  }
+  busy = false;
+  if (!saved){
+    banner('保存失败：这一句还没写进文件。检查服务是否还在跑，再按一次键。');
+    return;
+  }
+  $('saved').classList.add('on');
+  setTimeout(() => { idx++; render(); }, 90);
+}
+
+function goPrev(){
+  if (busy) return;
+  if (idx > 0){ idx--; render(); }
+  else flash('已经是第一句');
+}
+
+function goNext(skip){
+  if (busy) return;
+  if (idx >= total) return;
+  idx++;
+  render();
+  if (skip) flash('已跳过');
+}
+
+async function load(){
+  try {
+    const d = await api('/api/items');
+    items = d.items || [];
+    total = d.total || items.length;
+    const first = items.findIndex(x => !x.done);
+    idx = first < 0 ? total : first;
+    banner('');
+    render();
+  } catch (e) {
+    banner('连不上服务（8775 是否还在跑？）。刷新页面重试。');
+  }
+}
+
+document.addEventListener('keydown', e => {
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const k = e.key;
+  if (k >= '0' && k <= '9'){
+    e.preventDefault();
+    pick(k === '0' ? 10 : Number(k));
+    return;
+  }
+  if (k === 'ArrowLeft'){ e.preventDefault(); goPrev(); return; }
+  if (k === ' '){ e.preventDefault(); goNext(true); return; }
+  if (k === 'Enter'){ e.preventDefault(); goNext(true); return; }
+});
+
+$('btn-prev').addEventListener('click', goPrev);
+$('btn-skip').addEventListener('click', () => goNext(true));
+$('btn-key').addEventListener('click', () => flash('直接按数字键 1–0，0 表示 10'));
+
+load();
+</script>
+</body>
+</html>

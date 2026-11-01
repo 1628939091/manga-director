@@ -94,7 +94,7 @@ function card(it){
 
 fetch("/api/pair").then(r=>r.json()).then(d=>{
   document.getElementById("app").innerHTML =
-    d.items.map(card).join("") || "<p>没有数据</p>";
+    (d||[]).map(card).join("") || "<p>没有数据</p>";
 }).catch(e=>{
   document.getElementById("app").innerHTML = "<p>加载失败：" + e + "</p>";
 });
