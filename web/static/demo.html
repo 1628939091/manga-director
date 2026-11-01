@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>音频闭环 demo — naive vs calibrated</title>
+<style>
+  :root { --bg:#f5f4ef; --card:#ffffff; --line:#d9d7cd; --txt:#2c2c2a; --mut:#6f6e68;
+          --bad:#a32d2d; --good:#0f6e56; --acc:#185fa5; }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:24px 16px 60px; background:var(--bg); color:var(--txt);
+         font:15px/1.6 "Microsoft YaHei",sans-serif; }
+  .wrap { max-width:860px; margin:0 auto; }
+  h1 { font-size:20px; font-weight:600; margin:0 0 4px; }
+  .sub { color:var(--mut); font-size:13px; margin-bottom:20px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px;
+          padding:16px 18px; margin-bottom:18px; }
+  .head { display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
+  .who { font-weight:600; }
+  .meta { color:var(--mut); font-size:12px; }
+  .text { font-size:17px; margin:8px 0 4px; }
+  .cardnote { font-size:12px; color:var(--acc); background:#eef3fa;
+              border-radius:6px; padding:4px 10px; margin:6px 0 12px; }
+  .duo { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  .ver { border:1px solid var(--line); border-radius:8px; padding:10px 12px; }
+  .ver h3 { margin:0 0 6px; font-size:13px; font-weight:600; }
+  .oai { font-size:24px; font-weight:600; line-height:1.1; }
+  .oai small { font-size:12px; font-weight:400; color:var(--mut); margin-left:4px; }
+  .diffrow { margin-top:12px; font-size:13px; color:var(--mut);
+             border-top:1px dashed var(--line); padding-top:10px; }
+  .diff { font-weight:600; color:var(--acc); }
+  .spec { font-size:11.5px; color:var(--mut); margin-top:4px; }
+  audio { width:100%; height:34px; margin-top:6px; }
+  .err { color:var(--bad); padding:20px; }
+  .tag { display:inline-block; font-size:11px; padding:1px 7px; border-radius:9px;
+         margin-left:6px; vertical-align:2px; }
+  .t-naive { background:#f7c1c1; color:#791f1f; }
+  .t-cal { background:#9fe1cb; color:#04342c; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>音频闭环 demo：同一句台词，naive vs calibrated</h1>
+  <div class="sub">
+    naive = 内部 arousal 直接当表演强度（无抑制校准）｜calibrated = reference.calibrate 的 7 参数。
+    OAI = 表演过度指数（相对该角色中性基线的 z 组合 − 上下文期望），&lt;1.0 正常。
+    主播放器为 edge-tts 真人声；合成信号版（参数线性直控）仅为示意，非人声。
+    三句各配一张差异化角色卡，arousal 为人工金标。
+  </div>
+  <div id="app">加载中…</div>
+</div>
+<script>
+const VERDICT = v => v < 1.0 ? '正常' : (v < 2.0 ? '偏夸张' : '表演过度');
+
+async function load() {
+  let d;
+  try {
+    const raw = await (await fetch('/api/data')).json();
+    // 兼容两种接口形状：裸数组（新）+ {items, oai}（旧）
+    d = Array.isArray(raw) ? { items: raw, oai: {} } : raw;
+    if (Array.isArray(raw)) {
+      const rows = await (await fetch('/api/oai')).json();
+      d.oai = Object.fromEntries(rows.map(r => [r.line_id, r]));
+    }
+  }
+  catch (e) { document.getElementById('app').innerHTML =
+    '<div class="err">接口失败：' + e + '（服务是否还在跑？）</div>'; return; }
+  if (d.error) { document.getElementById('app').innerHTML =
+    '<div class="err">' + d.error + '</div>'; return; }
+  const app = document.getElementById('app');
+  app.innerHTML = d.items.map(it => {
+    const o = d.oai[it.line_id] || {};
+    const e = o.edge || {}, s = o.synth || o;   // 兼容旧 oai_table（无 synth 键）
+    const en = e.naive || {}, ec = e.calibrated || {};
+    const sn = s.naive || {}, sc = s.calibrated || {};
+    const w = it.wavs || {}, we = it.wavs_edge || {};
+    const spec = s => `I=${s.intensity}｜rate=${s.rate}字/s｜f0偏移=${s.f0_offset}st｜句后停顿=${s.pause_after_ms}ms`;
+    const card = it.demo_card || {};
+    const ver = (title, tagCls, tagTxt, ev, esv, wavE, wavS, sp) => `
+      <div class="ver">
+        <h3>${title}<span class="tag ${tagCls}">${tagTxt}</span></h3>
+        <div class="oai" style="color:var(${tagCls === 't-naive' ? '--bad' : '--good'})">${(ev.oai ?? '—').toFixed?.(2) ?? '—'}<small>${ev.verdict || ''}</small></div>
+        <audio controls preload="none" src="${wavE || ''}"></audio>
+        <div class="spec">真人声（edge-tts）｜${sp}</div>
+        <audio controls preload="none" src="${wavS || ''}" style="height:26px"></audio>
+        <div class="spec">↑ 合成信号示意（非人声）｜OAI ${(esv.oai ?? '—').toFixed?.(2) ?? '—'}</div>
+      </div>`;
+    return `
+    <div class="card">
+      <div class="head">
+        <span class="who">${it.character}</span>
+        <span class="meta">${it.scene || ''}｜人工 arousal = ${it.arousal_human}｜voice ${it.voice}</span>
+      </div>
+      <div class="text">「${it.text}」</div>
+      <div class="cardnote">角色卡：${card.note || ''}</div>
+      <div class="duo">
+        ${ver('naive', 't-naive', '无校准', en, sn, we.naive, w.naive, spec(it.naive || {}))}
+        ${ver('calibrated', 't-cal', '抑制校准', ec, sc, we.calibrated, w.calibrated, spec(it.calibrated || {}))}
+      </div>
+      <div class="diffrow">
+        OAI 差值（真人声） <span class="diff">${e.diff != null ? (e.diff > 0 ? '+' : '') + e.diff.toFixed(2) : '—'}</span>
+        ｜合成信号差值 <span class="diff">${s.diff != null ? (s.diff > 0 ? '+' : '') + s.diff.toFixed(2) : '—'}</span>
+        ｜baseline = 该角色中性朗读（I=4），两版共用同一 expected_arousal=${it.arousal_human}，
+        差值全部来自音频特征。
+      </div>
+    </div>`;
+  }).join('');
+}
+load();
+</script>
+</body>
+</html>
