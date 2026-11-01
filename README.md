@@ -349,11 +349,16 @@ manga-director/
 
 1. **加第二标注者**：现在的信度是「自一致 κ=0.935」（同一人隔期重标），
    不是「人 vs 人」。两人各标一遍才算真正的信度。
-2. **台词库扩到 170+ 并改全局无放回抽样**：现在 `generate_scenes` 只保证同一作品内
+2. **统一 2×2 的取数口径**：页面是现算（0.40/0.55/0.77/0.93），本文是分析产物
+   的中位数（0.42/0.53/0.78/0.96）。页面应直接读 `outputs/analysis_two_layer.md`
+   的产物，不要再算一遍——现算就有第二套口径，早晚漂。
+3. **台词库扩到 170+ 并改全局无放回抽样**：现在 `generate_scenes` 只保证同一作品内
    台词不重复，跨作品复用导致 170 行里只有 107 个不同台词（45 句出现 2~4 次）。
-   CI 已经按台词聚类校正，但根治要扩库 + 无放回——那会改变场景组成，需全部重跑。
-3. **补存 `judge_plain` 在 140 句上的评测明细**：`outputs/real_eval.json` 目前只存了
-   `judge_cue` 的 140 句三方对比（`judge_plain` 那轮只剩汇总数字，在
-   `outputs/analysis_real_scripts.md`）。重跑一次 `python eval_real.py` 即可补齐。
-4. **支持粘贴自己的剧本**：当前只能选内置 51 场（临时可用
-   `python workbench.py script.txt --out storyboard.json` 走导出层）。
+   CI 已按台词聚类校正，但根治要扩库 + 无放回——那会改变场景组成，需全部重跑。
+4. **L3 VLM 辅助判卷**（可选）：对生成的画面/音频做「是否符合参数」的第二证据源。
+
+## 已做但曾列在这里的事
+
+- ✅ 补存 `judge_plain` 在 140 句上的明细（`outputs/real_eval_plain.json`）。
+- ✅ 导出层与 CLI（`mdh/export.py` + `workbench.py`，可吃任意 `script.txt`）。
+- ✅ CI：GitHub Actions 在 push 时跑 36 个单测 + 两个体检脚本。

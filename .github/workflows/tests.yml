@@ -1,0 +1,35 @@
+name: tests
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  unittest:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: 依赖审计（本项目应为零第三方依赖）
+        run: |
+          if grep -rnE '^(import|from) (numpy|pandas|requests|openai|fastapi|flask)' mdh/ tests/ ; then
+            echo "::warning::检测到第三方依赖，与 README 声明的零依赖不一致"
+          fi
+
+      - name: 单元测试
+        run: python -m unittest discover -s tests -v
+
+      - name: 台词库体检（回归门）
+        run: python check_lines.py
+
+      - name: 场景体检（回归门）
+        run: python check_scenes.py --strict
