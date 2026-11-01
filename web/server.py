@@ -19,6 +19,7 @@ POST /api/run             跑 k 次，返回每次的镜头、判卷结果、k �
 
 from __future__ import annotations
 
+import csv
 import json
 import os
 import sys
@@ -45,6 +46,12 @@ COMPARE_K_MAX = 5    # 全量：13 场 × 5 臂 × k，同步请求扛不住更�
 # 只缓存 mock：mock 是确定性的，重算没有新信息；
 # 真实模型每次点击都应该是**新采样的 k 次**，缓存会悄悄毁掉 pass^k 的语义。
 _COMPARE_CACHE: dict[str, dict] = {}
+
+# ---- 另外两个视图的数据源（只读）----
+REAL_EVAL = os.path.join(ROOT, "outputs", "real_eval.json")
+REAL_FORM = os.path.join(ROOT, "annotations", "real_form.csv")          # 只读，取台词文本
+RECORDS_SINGLE = os.path.join(ROOT, "outputs", "records_castfix.jsonl")  # 单层最新一轮
+RECORDS_TWO = os.path.join(ROOT, "outputs", "records_two_layer.jsonl")   # 两层最新一轮
 
 _PUBLIC_GOLD = ("line_id", "character", "intensity", "suppression", "f0_offset",
                 "f0_range", "rate", "pause_after_ms", "expression", "constraints",
@@ -97,6 +104,136 @@ def _scene_brief(t: dict) -> dict:
         "n_lines": len(t["lines"]),
         "scene_types": sorted({ln.get("scene_type", "日常") for ln in t["lines"]}),
         "cast": list(t["characters"]),
+    }
+
+
+# ================= 两个附加视图的数据准备 =================
+def _spearman(a: list[float], b: list[float]) -> float | None:
+    """Spearman 秩相关（带并列秩取平均）。零依赖，n=140 级别毫秒级。"""
+    n = len(a)
+    if n < 3 or n != len(b):
+        return None
+
+    def rank(x: list[float]) -> list[float]:
+        order = sorted(range(n), key=lambda i: x[i])
+        r = [0.0] * n
+        i = 0
+        while i < n:
+            j = i
+            while j + 1 < n and x[order[j + 1]] == x[order[i]]:
+                j += 1
+            avg = (i + j) / 2 + 1
+            for t in range(i, j + 1):
+                r[order[t]] = avg
+            i = j + 1
+        return r
+
+    ra, rb = rank(a), rank(b)
+    ma, mb = sum(ra) / n, sum(rb) / n
+    num = sum((x - ma) * (y - mb) for x, y in zip(ra, rb))
+    den = (sum((x - ma) ** 2 for x in ra) * sum((y - mb) ** 2 for y in rb)) ** 0.5
+    return round(num / den, 3) if den else None
+
+
+def _real_eval_payload() -> dict:
+    """真实剧本视图：140 句三方对比（人标 / 模型 / 规则表）。"""
+    try:
+        ev = json.load(open(REAL_EVAL, encoding="utf-8"))
+    except FileNotFoundError:
+        return {"error": "outputs/real_eval.json 不存在，先跑 python eval_real.py"}
+    meta: dict[str, dict] = {}
+    try:  # 台词文本在标注表里（只读，绝不写回）
+        for r in csv.DictReader(open(REAL_FORM, encoding="utf-8-sig", newline="")):
+            meta[r.get("line_id", "")] = {
+                "text": r.get("台词", ""), "speaker": r.get("说话人", ""),
+                "work": r.get("出处", ""),
+            }
+    except OSError:
+        pass
+    rows = []
+    for item in ev.get("rows", []):
+        lid, h, m, k = (list(item) + [None, None, None])[:4]
+        md = meta.get(lid, {})
+        rows.append({"line_id": lid, "text": md.get("text", ""),
+                     "speaker": md.get("speaker", ""), "work": md.get("work", ""),
+                     "human": h, "model": m, "rule": k})
+    if not rows:
+        return {"error": "real_eval.json 里没有可比行"}
+    h = [r["human"] for r in rows]
+    m = [r["model"] for r in rows]
+    k = [r["rule"] for r in rows]
+
+    def mae(a, b):
+        return round(sum(abs(x - y) for x, y in zip(a, b)) / len(a), 2)
+
+    return {
+        "arm": ev.get("arm"), "n": len(rows),
+        "summary": {
+            "mae_model": mae(m, h), "mae_rule": mae(k, h),
+            "rho_model": _spearman(m, h), "rho_rule": _spearman(k, h),
+        },
+        "rows": rows,
+    }
+
+
+def _load_runs(path: str, arms: tuple[str, ...]) -> list[dict]:
+    try:
+        with open(path, encoding="utf-8") as f:
+            return [json.loads(l) for l in f if l.strip()
+                    and json.loads(l).get("scaffold") in arms]
+    except FileNotFoundError:
+        return []
+
+
+def _two_layer_payload() -> dict:
+    """两层视图：2×2 因子表 + 四臂明细，全部从 records 现算（口径 = 场景命中率中位数）。"""
+    single = _load_runs(RECORDS_SINGLE, ("card_injected", "card_formula"))
+    two = _load_runs(RECORDS_TWO, ("judge_plain", "judge_cue"))
+    if not single or not two:
+        return {"error": "records_castfix.jsonl / records_two_layer.jsonl 缺失，"
+                         "先跑 run_demo.py 与 run_two_layer.py"}
+
+    def arm_stats(records: list[dict], scaffold: str) -> dict:
+        rs = [r for r in records if r["scaffold"] == scaffold]
+        by: dict[str, dict[int, bool]] = {}
+        for r in rs:
+            by.setdefault(r["scene_id"], {})[r["repeat"]] = bool(r["passed"])
+        pow3 = sum(1 for v in by.values()
+                   if all(v.get(i, False) for i in range(3)))
+        scene_hr = []
+        for sid in by:
+            vals = [r["hit_rate"] for r in rs if r["scene_id"] == sid]
+            scene_hr.append(sum(vals) / len(vals))
+        vruns = sum(1 for r in rs if r.get("violations"))
+        return {
+            "scaffold": scaffold,
+            "n_runs": len(rs), "n_scenes": len(by),
+            "scene_median": round(sorted(scene_hr)[len(scene_hr) // 2], 3),
+            "pass_at_1": round(sum(r["passed"] for r in rs) / len(rs), 3),
+            "pass_pow_3": round(pow3 / len(by), 3),
+            "tokens": round(sum(r["tokens_in"] + r["tokens_out"] for r in rs) / len(rs), 1),
+            "violation_runs": vruns,
+        }
+
+    arms = [arm_stats(single, "card_injected"), arm_stats(single, "card_formula"),
+            arm_stats(two, "judge_plain"), arm_stats(two, "judge_cue")]
+    cells = {(a["scaffold"]): a["scene_median"] for a in arms}
+    single_plain = cells.get("card_injected", 0.0)
+    single_cue = cells.get("card_formula", 0.0)
+    two_plain = cells.get("judge_plain", 0.0)
+    two_cue = cells.get("judge_cue", 0.0)
+    return {
+        "n_scenes": arms[0]["n_scenes"],
+        "cells": {
+            "single_plain": single_plain, "single_cue": single_cue,
+            "two_plain": two_plain, "two_cue": two_cue,
+            "split_effect": [round(two_plain - single_plain, 2),
+                             round(two_cue - single_cue, 2)],
+            "cue_effect": [round(single_cue - single_plain, 2),
+                           round(two_cue - two_plain, 2)],
+            "interaction": round((two_cue - two_plain) - (single_cue - single_plain), 2),
+        },
+        "arms": arms,
     }
 
 
@@ -183,6 +320,10 @@ class Handler(BaseHTTPRequestHandler):
                 "scene_profile": {st: ref.SCENE_PROFILE.get(st) for st in
                                   {ln.get("scene_type", "日常") for ln in t["lines"]}},
             })
+        if p == "/api/real_eval":
+            return self._json(_real_eval_payload())
+        if p == "/api/two_layer":
+            return self._json(_two_layer_payload())
         if p == "/api/meta":
             return self._json({
                 "scaffolds": list(agents.SCAFFOLDS),

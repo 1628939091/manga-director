@@ -269,6 +269,41 @@
     .app{grid-template-columns:1fr;max-width:860px}
     .col.left{position:static}
   }
+  /* ---------- 视图切换（单层五臂 / 两层 / 真实剧本） ---------- */
+  .views{display:flex;gap:4px;background:#f2f4f8;border:1px solid var(--line);
+         border-radius:9px;padding:3px}
+  .views button{
+    border:0;background:transparent;color:var(--ink-2);font:inherit;font-size:13px;
+    padding:5px 14px;border-radius:7px;cursor:pointer;
+  }
+  .views button.on{background:var(--panel);color:var(--ink);font-weight:600;
+                   box-shadow:0 1px 3px rgba(20,26,36,.12)}
+  .viewpage{display:none;max-width:1100px;margin:0 auto;padding:18px 14px 60px}
+  .viewpage.on{display:block}
+  .viewpage h2{margin:4px 0 2px;font-size:19px}
+  .viewpage .lead{color:var(--ink-2);font-size:13.5px;margin:0 0 16px}
+  .vx-table{width:100%;border-collapse:collapse;background:var(--panel);
+            border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;
+            font-size:13px}
+  .vx-table th,.vx-table td{padding:8px 10px;border-bottom:1px solid var(--line-soft);
+            text-align:right;font-variant-numeric:tabular-nums}
+  .vx-table th{background:#f7f9fc;color:var(--ink-3);font-size:12px;
+               letter-spacing:.4px;font-weight:600}
+  .vx-table th:first-child,.vx-table td:first-child{text-align:left}
+  .vx-table td:first-child{font-weight:600}
+  .vx-table tr:last-child td{border-bottom:0}
+  .vx-cells{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:0 0 18px}
+  .vx-cell{background:var(--panel);border:1px solid var(--line);
+           border-radius:var(--radius);padding:14px}
+  .vx-cell small{color:var(--ink-3);font-size:12px}
+  .vx-cell b{display:block;font-size:26px;margin-top:2px;font-variant-numeric:tabular-nums}
+  .vx-chips{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 16px}
+  .vx-chips .pill{font-size:13px;padding:6px 12px}
+  .vx-chips .pill b{color:var(--ink)}
+  .vx-note{color:var(--ink-3);font-size:12.5px;margin:12px 2px}
+  .real-text{max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+             text-align:left !important;font-weight:400 !important;color:var(--ink)}
+  .best{color:var(--ok);font-weight:700}
 </style>
 </head>
 <body>
@@ -278,9 +313,14 @@
   <div class="spacer"></div>
   <span class="pill" id="pillModel">后端：mock</span>
   <span class="pill" id="pillTau">τ=0.8</span>
+  <nav class="views" id="viewNav">
+    <button data-view="single" class="on">单层五臂</button>
+    <button data-view="two">两层</button>
+    <button data-view="real">真实剧本</button>
+  </nav>
 </div>
 
-<div class="app">
+<div class="app" id="appSingle">
   <!-- ========== 左：剧本与控制 ========== -->
   <div class="col left">
     <div class="card">
@@ -379,6 +419,34 @@
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- ========== 视图 2：两层架构 ========== -->
+<section class="viewpage" id="viewTwo">
+  <h2>两层架构：判读交给模型，标定交给代码</h2>
+  <p class="lead">模型只输出 arousal / valence / intent / evidence 四个字段，
+     其余 7 个表演参数由 <code>reference.calibrate</code> 确定性计算。
+     判卷与单层完全同一把尺子，数字可直接比。口径：场景平均命中率的中位数。</p>
+  <div class="vx-cells" id="twoCells"></div>
+  <table class="vx-table" id="twoArms"></table>
+  <p class="vx-note">数据源：records_castfix.jsonl（单层）/ records_two_layer.jsonl（两层），
+     服务端 <code>/api/two_layer</code> 现算，与 outputs/analysis_two_layer.md 同口径。</p>
+</section>
+
+<!-- ========== 视图 3：真实剧本 ========== -->
+<section class="viewpage" id="viewReal">
+  <h2>真实剧本：140 句三方对比</h2>
+  <p class="lead">4 部中文电影的人工标注 vs <code>judge_plain</code> vs 关键词规则表。
+     金标准换成人之后，规则表几乎失去区分度——差别不在 MAE，在排序。</p>
+  <div class="vx-chips" id="realChips"></div>
+  <div class="vx-note" style="margin-top:0">出处筛选：
+    <select id="realFilter" style="width:auto;display:inline-block;padding:4px 8px">
+      <option value="">全部</option>
+    </select>
+　命中 = 与人标差 ≤1 分（灰色为更接近人标的一方）</div>
+  <table class="vx-table" id="realTable"></table>
+  <p class="vx-note">数据源：outputs/real_eval.json（评测明细）+ annotations/real_form.csv（只读，取台词文本）。
+     规则 ρ 与模型 ρ 是 Spearman 秩相关——MAE 打平时，排序能力才是分界线。</p>
+</section>
 
 <script>
 const $ = s => document.querySelector(s);
@@ -772,6 +840,96 @@ function copyPrompt(){
   navigator.clipboard.writeText(txt).then(()=>toast('已复制 ' + txt.length + ' 字符'))
     .catch(()=>toast('复制失败，请手动选择'));
 }
+
+/* ================= 视图切换：单层五臂 / 两层 / 真实剧本 ================= */
+const viewLoaded = {two: false, real: false};
+
+function showView(name){
+  document.querySelectorAll('#viewNav button').forEach(
+    b => b.classList.toggle('on', b.dataset.view === name));
+  $('#appSingle').style.display = (name === 'single') ? '' : 'none';
+  $('#viewTwo').classList.toggle('on', name === 'two');
+  $('#viewReal').classList.toggle('on', name === 'real');
+  if (name === 'two' && !viewLoaded.two) loadTwoView();
+  if (name === 'real' && !viewLoaded.real) loadRealView();
+}
+
+$('#viewNav').addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if (b) showView(b.dataset.view);
+});
+
+async function loadTwoView(){
+  viewLoaded.two = true;
+  const cells = $('#twoCells');
+  try {
+    const d = await (await fetch('/api/two_layer')).json();
+    if (d.error) { cells.innerHTML = `<div class="empty">${esc(d.error)}</div>`; return; }
+    const c = d.cells;
+    cells.innerHTML = `
+      <div class="vx-cell"><small>单层 · 不给线索表</small><b>${c.single_plain.toFixed(2)}</b></div>
+      <div class="vx-cell"><small>单层 · 给线索表</small><b>${c.single_cue.toFixed(2)}</b></div>
+      <div class="vx-cell"><small>两层 · 不给线索表</small><b>${c.two_plain.toFixed(2)}</b></div>
+      <div class="vx-cell"><small>两层 · 给线索表</small><b>${c.two_cue.toFixed(2)}</b></div>`;
+    $('#twoArms').innerHTML = `
+      <thead><tr><th>配置</th><th>场景命中率（中位）</th><th>原始 pass@1</th>
+        <th>pass^3</th><th>tokens/次</th><th>违反运行</th></tr></thead><tbody>` +
+      d.arms.map(a => `<tr><td>${esc(a.scaffold)}</td>
+        <td>${a.scene_median.toFixed(2)}</td>
+        <td>${(a.pass_at_1 * 100).toFixed(1)}%</td>
+        <td>${(a.pass_pow_3 * 100).toFixed(1)}%</td>
+        <td>${a.tokens}</td>
+        <td>${a.violation_runs} / ${a.n_runs}</td></tr>`).join('') + `</tbody>
+      <tfoot><tr><td>因子读数</td><td colspan="5" style="text-align:left">
+        拆层效应 +${c.split_effect[0]} / +${c.split_effect[1]}　·　
+        给表效应 +${c.cue_effect[0]} / +${c.cue_effect[1]}　·　
+        交互 ${c.interaction >= 0 ? '+' : ''}${c.interaction}</td></tr></tfoot>`;
+  } catch (e) {
+    cells.innerHTML = '<div class="empty">加载失败：' + esc(String(e)) + '</div>';
+  }
+}
+
+async function loadRealView(){
+  viewLoaded.real = true;
+  const chips = $('#realChips');
+  try {
+    const d = await (await fetch('/api/real_eval')).json();
+    if (d.error) { chips.innerHTML = `<span class="pill">${esc(d.error)}</span>`; return; }
+    const s = d.summary;
+    chips.innerHTML = `
+      <span class="pill">n=<b>${d.n}</b>　臂=<b>${esc(d.arm)}</b></span>
+      <span class="pill">MAE vs 人：模型 <b>${s.mae_model}</b> ／ 规则 <b>${s.mae_rule}</b></span>
+      <span class="pill">秩相关 ρ：模型 <b>${s.rho_model}</b> ／ 规则 <b>${s.rho_rule}</b></span>`;
+    const works = [...new Set(d.rows.map(r => r.work).filter(Boolean))];
+    $('#realFilter').innerHTML = '<option value="">全部</option>' +
+      works.map(w => `<option value="${esc(w)}">${esc(w)}</option>`).join('');
+    const render = () => {
+      const f = $('#realFilter').value;
+      const rows = d.rows.filter(r => !f || r.work === f);
+      $('#realTable').innerHTML = `
+        <thead><tr><th>台词</th><th>说话人</th><th>出处</th>
+          <th>人标</th><th>模型</th><th>规则</th><th>更接近人标</th></tr></thead><tbody>` +
+        rows.map(r => {
+          const dm = Math.abs(r.model - r.human), dr = Math.abs(r.rule - r.human);
+          const best = dm < dr ? '模型' : (dr < dm ? '规则' : '平');
+          const cls = best === '模型' ? 'best' : (best === '规则' ? '' : '');
+          return `<tr><td class="real-text" title="${esc(r.text)}">${esc(r.text)}</td>
+            <td style="text-align:left">${esc(r.speaker)}</td>
+            <td style="text-align:left">${esc(r.work)}</td>
+            <td>${r.human}</td><td>${r.model}</td><td>${r.rule}</td>
+            <td class="${cls}">${best}</td></tr>`;
+        }).join('') + '</tbody>';
+    };
+    $('#realFilter').addEventListener('change', render);
+    render();
+  } catch (e) {
+    chips.innerHTML = '<span class="pill">加载失败：' + esc(String(e)) + '</span>';
+  }
+}
+
+/* URL 带 ?view=two / ?view=real 时直接落到对应视图 */
+const initialView = new URLSearchParams(location.search).get('view');
+if (initialView === 'two' || initialView === 'real') showView(initialView);
 
 boot();
 </script>
