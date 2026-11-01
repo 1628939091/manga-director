@@ -292,7 +292,13 @@ def split_breakdown(records: list[dict], scaffolds: list[str], tau: float) -> li
             out.append({
                 "scaffold": sc, "split": sp,
                 "scenes": len({r["scene_id"] for r in sub}),
-                "median": quantiles([r["hit_rate"] for r in sub])[2],
+                # 与 2×2 因子表同口径：先按场景把 k 次平均，再对场景取中位数。
+                # 直接对「每次运行」取中位数是第二套定义，两处会打架。
+                "median": quantiles([
+                    sum(v) / len(v) for v in
+                    {sid: [r["hit_rate"] for r in sub if r["scene_id"] == sid]
+                     for sid in {r["scene_id"] for r in sub}}.values()
+                ])[2],
                 "ci": scene_mean_ci(sub, sc),
                 "wrong": avg_wrong_fields(sub, sc),
                 "mae": st_["arousal_mae"] if st_["n"] else None,

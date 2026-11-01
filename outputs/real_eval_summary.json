@@ -1,0 +1,73 @@
+{
+ "n": 140,
+ "boot": 2000,
+ "seed": 7,
+ "arms": [
+  {
+   "arm": "judge_plain",
+   "mae": 1.25,
+   "ci": [
+    1.08,
+    1.43
+   ],
+   "rho": 0.54
+  },
+  {
+   "arm": "judge_cue",
+   "mae": 1.33,
+   "ci": [
+    1.18,
+    1.47
+   ],
+   "rho": 0.45
+  },
+  {
+   "arm": "规则表",
+   "mae": 1.14,
+   "ci": [
+    0.99,
+    1.28
+   ],
+   "rho": 0.09
+  }
+ ],
+ "by_work": [
+  {
+   "work": "大话西游",
+   "n": 40,
+   "plain": 1.01,
+   "cue": 1.79,
+   "rule": 1.07,
+   "delta": 0.78
+  },
+  {
+   "work": "牯岭街少年杀人事件",
+   "n": 34,
+   "plain": 1.5,
+   "cue": 1.13,
+   "rule": 0.96,
+   "delta": -0.37
+  },
+  {
+   "work": "饮食男女",
+   "n": 34,
+   "plain": 1.29,
+   "cue": 1.1,
+   "rule": 1.12,
+   "delta": -0.19
+  },
+  {
+   "work": "翻滚吧阿信",
+   "n": 32,
+   "plain": 1.25,
+   "cue": 1.19,
+   "rule": 1.43,
+   "delta": -0.06
+  }
+ ],
+ "sources": {
+  "plain": "outputs/real_eval.json",
+  "cue": "outputs/real_eval_cue.json",
+  "form": "annotations/real_form.csv"
+ }
+}

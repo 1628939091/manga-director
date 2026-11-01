@@ -29,7 +29,7 @@ from urllib.parse import urlparse, parse_qs
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from mdh import agents, judge, llm, metrics, runner, tasks  # noqa: E402
+from mdh import agents, judge, llm, metrics, report_io, runner, tasks  # noqa: E402
 from mdh import reference as ref  # noqa: E402
 from mdh import schema  # noqa: E402
 
@@ -49,9 +49,10 @@ _COMPARE_CACHE: dict[str, dict] = {}
 
 # ---- 另外两个视图的数据源（只读）----
 REAL_EVAL = os.path.join(ROOT, "outputs", "real_eval.json")
+REAL_SUMMARY = os.path.join(ROOT, "outputs", "real_eval_summary.json")  # analyze_real.py 产物
 REAL_FORM = os.path.join(ROOT, "annotations", "real_form.csv")          # 只读，取台词文本
-RECORDS_SINGLE = os.path.join(ROOT, "outputs", "records_castfix.jsonl")  # 单层最新一轮
-RECORDS_TWO = os.path.join(ROOT, "outputs", "records_two_layer.jsonl")   # 两层最新一轮
+# 两层视图的唯一真值：analysis.py 落盘的分析产物。页面只读不现算。
+TWO_LAYER_MD = os.path.join(ROOT, "outputs", "analysis_two_layer.md")
 
 _PUBLIC_GOLD = ("line_id", "character", "intensity", "suppression", "f0_offset",
                 "f0_range", "rate", "pause_after_ms", "expression", "constraints",
@@ -108,39 +109,20 @@ def _scene_brief(t: dict) -> dict:
 
 
 # ================= 两个附加视图的数据准备 =================
-def _spearman(a: list[float], b: list[float]) -> float | None:
-    """Spearman 秩相关（带并列秩取平均）。零依赖，n=140 级别毫秒级。"""
-    n = len(a)
-    if n < 3 or n != len(b):
-        return None
-
-    def rank(x: list[float]) -> list[float]:
-        order = sorted(range(n), key=lambda i: x[i])
-        r = [0.0] * n
-        i = 0
-        while i < n:
-            j = i
-            while j + 1 < n and x[order[j + 1]] == x[order[i]]:
-                j += 1
-            avg = (i + j) / 2 + 1
-            for t in range(i, j + 1):
-                r[order[t]] = avg
-            i = j + 1
-        return r
-
-    ra, rb = rank(a), rank(b)
-    ma, mb = sum(ra) / n, sum(rb) / n
-    num = sum((x - ma) * (y - mb) for x, y in zip(ra, rb))
-    den = (sum((x - ma) ** 2 for x in ra) * sum((y - mb) ** 2 for y in rb)) ** 0.5
-    return round(num / den, 3) if den else None
-
-
 def _real_eval_payload() -> dict:
-    """真实剧本视图：140 句三方对比（人标 / 模型 / 规则表）。"""
+    """真实剧本视图：140 句三方对比（人标 / 模型 / 规则表）。
+
+    MAE / CI / ρ 一律读 `outputs/real_eval_summary.json`（`python analyze_real.py` 的产物），
+    页面不现算：现算一次就会与 md、README 各差一点（ρ 0.538 vs 0.54），三处并存最难解释。
+    明细行仍来自 `real_eval.json`，只用于渲染表格，不参与汇总。
+    """
     try:
         ev = json.load(open(REAL_EVAL, encoding="utf-8"))
     except FileNotFoundError:
         return {"error": "outputs/real_eval.json 不存在，先跑 python eval_real.py"}
+    summ = report_io.read_real_summary(REAL_SUMMARY)
+    if "error" in summ:
+        return summ
     meta: dict[str, dict] = {}
     try:  # 台词文本在标注表里（只读，绝不写回）
         for r in csv.DictReader(open(REAL_FORM, encoding="utf-8-sig", newline="")):
@@ -159,81 +141,37 @@ def _real_eval_payload() -> dict:
                      "human": h, "model": m, "rule": k})
     if not rows:
         return {"error": "real_eval.json 里没有可比行"}
-    h = [r["human"] for r in rows]
-    m = [r["model"] for r in rows]
-    k = [r["rule"] for r in rows]
-
-    def mae(a, b):
-        return round(sum(abs(x - y) for x, y in zip(a, b)) / len(a), 2)
-
     return {
-        "arm": ev.get("arm"), "n": len(rows),
-        "summary": {
-            "mae_model": mae(m, h), "mae_rule": mae(k, h),
-            "rho_model": _spearman(m, h), "rho_rule": _spearman(k, h),
-        },
+        "arm": ev.get("arm"),
+        "n": summ["n"] or len(rows),
+        "summary": summ["summary"],
+        "by_work": summ["by_work"],
+        "source": "outputs/real_eval_summary.json",
+        "source_mtime": summ["source_mtime"],
         "rows": rows,
     }
 
 
-def _load_runs(path: str, arms: tuple[str, ...]) -> list[dict]:
-    try:
-        with open(path, encoding="utf-8") as f:
-            return [json.loads(l) for l in f if l.strip()
-                    and json.loads(l).get("scaffold") in arms]
-    except FileNotFoundError:
-        return []
-
-
 def _two_layer_payload() -> dict:
-    """两层视图：2×2 因子表 + 四臂明细，全部从 records 现算（口径 = 场景命中率中位数）。"""
-    single = _load_runs(RECORDS_SINGLE, ("card_injected", "card_formula"))
-    two = _load_runs(RECORDS_TWO, ("judge_plain", "judge_cue"))
-    if not single or not two:
-        return {"error": "records_castfix.jsonl / records_two_layer.jsonl 缺失，"
-                         "先跑 run_demo.py 与 run_two_layer.py"}
+    """两层视图：2×2 因子表 + 四臂明细，**只读** analysis_two_layer.md，不再现算。
 
-    def arm_stats(records: list[dict], scaffold: str) -> dict:
-        rs = [r for r in records if r["scaffold"] == scaffold]
-        by: dict[str, dict[int, bool]] = {}
-        for r in rs:
-            by.setdefault(r["scene_id"], {})[r["repeat"]] = bool(r["passed"])
-        pow3 = sum(1 for v in by.values()
-                   if all(v.get(i, False) for i in range(3)))
-        scene_hr = []
-        for sid in by:
-            vals = [r["hit_rate"] for r in rs if r["scene_id"] == sid]
-            scene_hr.append(sum(vals) / len(vals))
-        vruns = sum(1 for r in rs if r.get("violations"))
-        return {
-            "scaffold": scaffold,
-            "n_runs": len(rs), "n_scenes": len(by),
-            "scene_median": round(sorted(scene_hr)[len(scene_hr) // 2], 3),
-            "pass_at_1": round(sum(r["passed"] for r in rs) / len(rs), 3),
-            "pass_pow_3": round(pow3 / len(by), 3),
-            "tokens": round(sum(r["tokens_in"] + r["tokens_out"] for r in rs) / len(rs), 1),
-            "violation_runs": vruns,
-        }
-
-    arms = [arm_stats(single, "card_injected"), arm_stats(single, "card_formula"),
-            arm_stats(two, "judge_plain"), arm_stats(two, "judge_cue")]
-    cells = {(a["scaffold"]): a["scene_median"] for a in arms}
-    single_plain = cells.get("card_injected", 0.0)
-    single_cue = cells.get("card_formula", 0.0)
-    two_plain = cells.get("judge_plain", 0.0)
-    two_cue = cells.get("judge_cue", 0.0)
+    为什么改成读：页面现算（0.40/0.55/0.77/0.93）与产物 md（0.42/0.53/0.78/0.96）
+    会是两套数字。差 0.01~0.03 不算大，但两处并存，评审一对照就会怀疑评测本身。
+    唯一真值交给分析产物，页面只负责显示——这也符合本项目「判卷可复算」的主张：
+    数字只在一处生成，其余地方都是读者。
+    """
+    data = report_io.read_two_layer_factors(TWO_LAYER_MD)
+    if "error" in data:
+        return data
     return {
-        "n_scenes": arms[0]["n_scenes"],
-        "cells": {
-            "single_plain": single_plain, "single_cue": single_cue,
-            "two_plain": two_plain, "two_cue": two_cue,
-            "split_effect": [round(two_plain - single_plain, 2),
-                             round(two_cue - single_cue, 2)],
-            "cue_effect": [round(single_cue - single_plain, 2),
-                           round(two_cue - two_plain, 2)],
-            "interaction": round((two_cue - two_plain) - (single_cue - single_plain), 2),
-        },
-        "arms": arms,
+        "cells": data["cells"],
+        "effects": data["effects"],
+        "arms": data["arms"],
+        "k": data["k"],
+        "n_runs": data["n_runs"],
+        "warnings": data["warnings"],
+        "source": "outputs/analysis_two_layer.md",
+        "source_mtime": data["source_mtime"],
     }
 
 
