@@ -867,7 +867,13 @@ async function loadTwoView(){
   try {
     const d = await (await fetch('/api/two_layer')).json();
     if (d.error) { cells.innerHTML = `<div class="empty">${esc(d.error)}</div>`; return; }
+    if (!d.cells || !d.effects) {
+      cells.innerHTML = '<div class="empty">接口版本不匹配（缺少 cells/effects 字段）——'
+        + '多半是浏览器缓存了旧页面，按 Ctrl+F5 强制刷新。</div>';
+      return;
+    }
     const c = d.cells, e = d.effects;
+    const sp = e.split || [0, 0], cu = e.cue || [0, 0];
     cells.innerHTML = `
       <div class="vx-cell"><small>单层 · 不给线索表</small><b>${c.single_plain.toFixed(2)}</b></div>
       <div class="vx-cell"><small>单层 · 给线索表</small><b>${c.single_cue.toFixed(2)}</b></div>
@@ -877,17 +883,18 @@ async function loadTwoView(){
       <thead><tr><th>配置</th><th>场景平均命中率</th><th>聚类 95% CI</th>
         <th>行级 pass@τ</th><th>每行错字段</th><th>原始 pass@1</th></tr></thead><tbody>` +
       d.arms.map(a => {
-        const ci = a.ci ? `${a.ci[0].toFixed(1)}% [${a.ci[1].toFixed(1)}, ${a.ci[2].toFixed(1)}]` : '—';
-        return `<tr><td>${esc(a.label)}</td>
-        <td>${a.scene_median.toFixed(2)}</td>
+        const n = v => Number(v || 0).toFixed(1);
+        const ci = a.ci ? `${n(a.ci[0])}% [${n(a.ci[1])}, ${n(a.ci[2])}]` : '—';
+        return `<tr><td>${esc(a.label || a.scaffold || a.arm || '')}</td>
+        <td>${(a.scene_median || 0).toFixed(2)}</td>
         <td>${ci}</td>
-        <td>${a.line_pass.toFixed(1)}%</td>
-        <td>${a.wrong_fields.toFixed(2)}</td>
-        <td>${a.raw_pass1.toFixed(1)}%</td></tr>`;
+        <td>${n(a.line_pass)}%</td>
+        <td>${(a.wrong_fields || 0).toFixed(2)}</td>
+        <td>${n(a.raw_pass1)}%</td></tr>`;
       }).join('') + `</tbody>
       <tfoot><tr><td>因子读数</td><td colspan="5" style="text-align:left">
-        拆层效应 +${e.split[0]} / +${e.split[1]}　·　
-        给表效应 +${e.cue[0]} / +${e.cue[1]}　·　
+        拆层效应 +${sp[0]} / +${sp[1]}　·　
+        给表效应 +${cu[0]} / +${cu[1]}　·　
         交互 ${e.interaction >= 0 ? '+' : ''}${e.interaction}</td></tr></tfoot>`;
     const when = d.source_mtime
       ? new Date(d.source_mtime * 1000).toLocaleString('zh-CN', {hour12: false}) : '';

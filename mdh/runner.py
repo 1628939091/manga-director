@@ -177,7 +177,7 @@ def fewshot_examples(task: dict, pool: list[dict], n: int = 2) -> list[dict]:
 
 def make_example_provider(pool: list[dict], n: int = 2):
     def provider(task: dict, scaffold: str):
-        if scaffold != "card_fewshot":
+        if scaffold not in ("card_fewshot", "agent_loop"):
             return None
         return fewshot_examples(task, pool, n)
     return provider

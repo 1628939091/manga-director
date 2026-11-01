@@ -29,7 +29,7 @@ from . import pipeline
 from . import reference as ref
 from . import schema
 
-SCAFFOLDS = ("naive_shot", "card_injected", "card_fewshot", "card_repair",
+SCAFFOLDS = ("naive_shot", "card_injected", "card_fewshot", "card_repair", "agent_loop",
              "card_formula", "judge_plain", "judge_cue", "judge_nudge")
 
 # 两层架构的两个臂：模型只判读，标定由 pipeline 完成
@@ -364,6 +364,13 @@ def l1_feedback(output: dict, task: dict) -> list[str]:
 # --------------------------------------------------------------------------
 def run_scaffold(task: dict, scaffold: str, llm, examples: list[dict] | None = None,
                  max_repair: int = 2, repeat: int = 0) -> dict:
+    if scaffold == "agent_loop":
+        # 真正的 Agent 循环：模型自己决定查角色卡 / 检索 / 自检 / 交卷。
+        # 检索库由 examples 提供（调用方保证跨作品，不泄漏当前场景）。
+        from . import tools as _tools
+        lib = [{"text": (e.get("evidence") or ""), "shot": e} for e in (examples or [])]
+        return _tools.run_agent(task, llm, library=lib, repeat=repeat)
+
     if scaffold not in SCAFFOLDS:
         raise ValueError(f"未知 scaffold: {scaffold}")
 
